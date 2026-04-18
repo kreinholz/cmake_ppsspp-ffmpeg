@@ -1,7 +1,8 @@
 cmake_minimum_required (VERSION 3.10.0)
 project (ffmpeg)
 
-include(generated_headers.cmake)
+find_program(YASM_EXECUTABLE yasm REQUIRED)
+enable_language(C ASM_NASM)
 
 set(SRC_DIR ../ffmpeg)
 set(LIBAVCODEC_SRC_DIR ${SRC_DIR}/libavcodec)
@@ -9,6 +10,14 @@ set(LIBAVFORMAT_SRC_DIR ${SRC_DIR}/libavformat)
 set(LIBAVUTIL_SRC_DIR ${SRC_DIR}/libavutil)
 set(LIBSWRESAMPLE_SRC_DIR ${SRC_DIR}/libswresample)
 set(LIBSWSCALE_SRC_DIR ${SRC_DIR}/libswscale)
+
+include(generated_headers.cmake)
+
+# To Do: add some conditionals to not break builds where PIC is not supported, if any
+# Seems to be enabled by default at least on amd64 FreeBSD 15.0, but shouldn't hurt to explicitly request it
+#add_compile_options(-fPIC)
+set(CMAKE_C_FLAGS "-fPIC")
+set(CMAKE_ASM_NASM_FLAGS "-DPIC -P ${CMAKE_CURRENT_BINARY_DIR}/config.asm")
 
 # Mimic the naming convention of current ppsspp-ffmpeg precompiled libraries and distributed headers
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_HOST_SYSTEM_NAME}/${CMAKE_SYSTEM_PROCESSOR}/lib)
@@ -161,7 +170,7 @@ set(LIBAVCODEC_SOURCE_FILES
 	${LIBAVCODEC_SRC_DIR}/tiff_common.c
 	${LIBAVCODEC_SRC_DIR}/utils.c
 #	${LIBAVCODEC_SRC_DIR}/vdpau.c	# I had this in my gmake-generated object files, but disabled hwaccels
-	${LIBAVCODEC_SRC_DIR}/videodsp.c
+	${LIBAVCODEC_SRC_DIR}/videodsp.c	# if we conditionally append sources to add vpdpau, need cmake find package)
 	${LIBAVCODEC_SRC_DIR}/vorbis_parser.c
 	${LIBAVCODEC_SRC_DIR}/xiph.c
 	${LIBAVCODEC_SRC_DIR}/xvididct.c
@@ -191,16 +200,88 @@ if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/dxva2.c)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/dxva2_h264.c)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/avcodecres.c)
-	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/file_open.c) # if LIBC_MSVC
-else()
+	if (MSVC) # if LIBC_MSVCRT present; there may be a better/more accurate way to test for this
+		list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/file_open.c)
+	endif()
+else() # To Do; threads should actually be tested for, although a POSIX system without threads?
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread.c)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread_slice.c)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread_frame.c)
 endif()
-# To Do - add a conditional for HAVE_LIBC_MSVCRT to pull in file_open.c
-# Along those lines--deal with threads, on both UNIX and Windows, as conditionals, see libavcodec/Makefile
-# Because without it we get linker errors building PPSSPP with these bundled ffmpeg libs
-# I did an ugly, quick-and-dirty for threads, based on an else() after Windows, but this SHOULD be a bona fide test
+
+# Architecture-specific sources
+# To Do - verify that we can actually use ASM on x86 in addition to x86_64; I seem to recall this being an issue
+# at least on FreeBSD
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*")
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/aacpsdsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/aacpsdsp.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/blockdsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/blockdsp.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/bswapdsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/bswapdsp.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/constants.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/dct_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/dct32.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/fdct.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/fdctdsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/fft_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/fft.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/fpel.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h263_loopfilter.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h263dsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_chromamc_10bit.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_chromamc.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_deblock_10bit.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_deblock.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_idct_10bit.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_idct.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_intrapred_10bit.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_intrapred_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_intrapred.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_qpel_10bit.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_qpel_8bit.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_qpel.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_weight_10bit.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264_weight.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264chroma_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/h264dsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/hpeldsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/hpeldsp.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/huffyuvencdsp_mmx.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/huffyuvencdsp.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/idctdsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/idctdsp.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/imdct36.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/lossless_videodsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/lossless_videodsp.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/me_cmp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/me_cmp.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/mpegaudiodsp.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/mpegvideo.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/mpegvideodsp.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/mpegvideoenc.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/mpegvideoencdsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/mpegvideoencdsp.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/pixblockdsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/pixblockdsp.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/qpel.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/qpeldsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/qpeldsp.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/sbrdsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/sbrdsp.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/simple_idct.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/simple_idct10.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/videodsp_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/videodsp.asm)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/xvididct_init.c)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/xvididct.asm)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*")
+	# To Do - add processor-specific hardware optimized sources
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm.*")
+	# To Do - add processor-specific hardware optimized sources
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "mips.*")
+	# To Do - add processor-specific hardware optimized sources
+endif()
 
 add_library(avcodec STATIC ${LIBAVCODEC_SOURCE_FILES})
 target_precompile_headers(avcodec PRIVATE ${LIBAVUTIL_SRC_DIR}/internal.h ${LIBAVUTIL_SRC_DIR}/intmath.h)
@@ -414,19 +495,26 @@ set(LIBAVUTIL_HEADERS
 # Architecture-specific sources
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*")
 	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/x86/cpu.c)
+	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/x86/cpuid.asm)
 	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/x86/fixed_dsp_init.c)
+	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/x86/fixed_dsp.asm)
 	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/x86/float_dsp_init.c)
+	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/x86/float_dsp.asm)
 	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/x86/lls_init.c)
+	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/x86/lls.asm)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*")
+	# To Do - add appropriate ASM files
 	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/aarch64/cpu.c)
 	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/aarch64/float_dsp_init.c)
 	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/aarch64/float_dsp_neon.c)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm.*")
+	# To Do - add appropriate ASM files
 	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/arm/cpu.c)
 	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/arm/float_dsp_init_arm.c)
 	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/arm/float_dsp_init_neon.c)
 	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/arm/float_dsp_neon.c)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "mips.*")
+	# To Do - add appropriate ASM files
 	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/mips/float_dsp_mips.c)
 endif()
 
@@ -468,12 +556,17 @@ set(LIBSWRESAMPLE_HEADERS
 # NOTE: I'm not sure if neontest.c is required for aarch64 and arm, or if neon-objs should replace objs
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*")
 	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/x86/audio_convert_init.c)
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/x86/audio_convert.asm)
 	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/x86/rematrix_init.c)
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/x86/rematrix.asm)
 	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/x86/resample_init.c)
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/x86/resample.asm)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*")
+	# To Do - add appropriate ASM files
 	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/aarch64/audio_convert_init.c)
 	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/aarch64/audio_convert_neon.c)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm.*")
+	# To Do - add appropriate ASM files
 	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/arm/audio_convert_init.c)
 	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/arm/audio_convert_neon.c)
 endif()
@@ -515,10 +608,14 @@ set(LIBSWSCALE_HEADERS
 
 # Architecture-specific sources
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*")
+	list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/x86/hscale_fast_bilinear_simd.c)
+	list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/x86/input.asm)
 	list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/x86/rgb2rgb.c)
 	list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/x86/swscale.c)
 	list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/x86/yuv2rgb.c)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*|arm.*")
+	# To do - fix this. These don't look right; directory contains mostly handwritten .S assembly files that may
+	# require pre-processing through the C compiler
 	list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/arm/swscale_unscaled.c)
 	list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/arm/yuv2rgb.c)
 endif()
