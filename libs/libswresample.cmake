@@ -1,0 +1,41 @@
+# libswresample source files (all platforms)
+set(LIBSWRESAMPLE_SOURCE_FILES
+	${LIBSWRESAMPLE_SRC_DIR}/swresample.h
+	${LIBSWRESAMPLE_SRC_DIR}/audioconvert.c
+	${LIBSWRESAMPLE_SRC_DIR}/dither.c
+	${LIBSWRESAMPLE_SRC_DIR}/options.c
+	${LIBSWRESAMPLE_SRC_DIR}/rematrix.c
+	${LIBSWRESAMPLE_SRC_DIR}/resample_dsp.c
+	${LIBSWRESAMPLE_SRC_DIR}/resample.c
+	${LIBSWRESAMPLE_SRC_DIR}/swresample_frame.c
+	${LIBSWRESAMPLE_SRC_DIR}/swresample.c
+)
+
+set(LIBSWRESAMPLE_HEADERS
+	${LIBSWRESAMPLE_SRC_DIR}/swresample.h
+	${LIBSWRESAMPLE_SRC_DIR}/version.h
+)
+
+# Architecture-specific sources
+# NOTE: I'm not sure if neontest.c is required for aarch64 and arm, or if neon-objs should replace objs
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*")
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/x86/audio_convert_init.c)
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/x86/audio_convert.asm)
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/x86/rematrix_init.c)
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/x86/rematrix.asm)
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/x86/resample_init.c)
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/x86/resample.asm)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*")
+	# To Do - add appropriate ASM files
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/aarch64/audio_convert_init.c)
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/aarch64/audio_convert_neon.c)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm.*")
+	# To Do - add appropriate ASM files
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/arm/audio_convert_init.c)
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/arm/audio_convert_neon.c)
+endif()
+
+# OS-specific sources
+if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+	list(APPEND LIBSWRESAMPLE_SOURCE_FILES ${LIBSWRESAMPLE_SRC_DIR}/swresampleres.rc)
+endif()
