@@ -1,6 +1,19 @@
 cmake_minimum_required (VERSION 3.10.0)
 project (ffmpeg)
 
+# To Do - create a variable to store COMPILER_Flags which we can then conditionally change based on the build target
+
+# To Do - add a flag that puts any x86_64 or the like to a "-m amd64" flag for YASM. Also need to appropriately set the target format--"-f elf64", "-f elf32", win64, win32, etc.
+
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*")
+	set(ASM_ARCH="-m amd64")
+	if (CMAKE_HOST_SYSTEM_NAME STREQUAL "CYGWIN.*|Windows.*|MSYS.*")
+		set(ASM_FORMAT="-f win64")
+	elseif (CMAKE_HOST_SYSTEM_NAME STREQUAL "Android.*|DragonFly.*|FreeBSD.*|Linux.*|NetBSD.*|OpenBSD.*|SunOS.*")
+		set(ASM_FORMAT="-f elf64")
+	endif()
+endif()
+
 find_program(YASM_EXECUTABLE yasm REQUIRED)
 enable_language(C ASM_NASM)
 
@@ -17,7 +30,7 @@ include(generated_headers.cmake)
 # Seems to be enabled by default at least on amd64 FreeBSD 15.0, but shouldn't hurt to explicitly request it
 #add_compile_options(-fPIC)
 set(CMAKE_C_FLAGS "-fPIC")
-set(CMAKE_ASM_NASM_FLAGS "-DPIC -P ${CMAKE_CURRENT_BINARY_DIR}/config.asm")
+set(CMAKE_ASM_NASM_FLAGS "-DPIC ${ASM_ARCH} ${ASM_FORMAT} -P ${CMAKE_CURRENT_BINARY_DIR}/config.asm")
 
 # Mimic the naming convention of current ppsspp-ffmpeg precompiled libraries and distributed headers
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_HOST_SYSTEM_NAME}/${CMAKE_SYSTEM_PROCESSOR}/lib)
