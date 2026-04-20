@@ -22,17 +22,16 @@ set(LIBSWSCALE_HEADERS
 )
 
 # Architecture-specific sources
-if (ENABLE_OPTIMIZATIONS)
+if (ENABLE_OPTIMIZATIONS)	# NOTE: these .c files contain inline ASM; make sure cmake is handling them properly
 	if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*")
 		list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/x86/hscale_fast_bilinear_simd.c)
 		list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/x86/input.asm)
 		list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/x86/rgb2rgb.c)
 		list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/x86/swscale.c)
 		list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/x86/yuv2rgb.c)
-	elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*|arm.*")
-		# To do - add appropriate additional sources
+	elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm.*")
 		list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/arm/swscale_unscaled.c)
-		list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/arm/yuv2rgb.c)
+		list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/arm/yuv2rgb_neon.S)
 	endif()
 endif()
 
