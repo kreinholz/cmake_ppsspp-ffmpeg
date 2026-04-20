@@ -4,11 +4,28 @@ project (ffmpeg)
 # To Do - create a variable to store COMPILER_Flags which we can then conditionally change based on the build target
 
 # Assign appropriate Assembler settings based on architecture and target
-# To Do - set a flag for the entire ffmpeg-build that disables machine-specific optimizations if Assembler tests fail
+option(ENABLE_OPTIMIZATIONS "Build ffmpeg with architecture-specific optimizations and Machine Assembly code" OFF)
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*")
+	find_program(YASM_EXECUTABLE yasm)
+	if(YASM_EXECUTABLE)
+		message(STATUS "Assembler found at: ${YASM_EXECUTABLE}. Enabling ${CMAKE_SYSTEM_PROCESSOR} optimizations")
+		enable_language(C ASM_NASM)
+		set(ENABLE_OPTIMIZATIONS ON CACHE BOOL "Build ffmpeg with architecture-specific optimizations" FORCE)
+	else()
+		message(WARNING "YASM not found. Building ffmpeg without ${CMAKE_SYSTEM_PROCESSOR} optimizations")
+	endif()
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*|arm.*|mips.*")
+	if(CMAKE_ASM_COMPILER)
+		message(STATUS "Assembler found at: ${CMAKE_ASM_COMPILER}. Enabling ${CMAKE_SYSTEM_PROCESSOR} optimizations")
+		enable_language(C ASM)
+		set(ENABLE_OPTIMIZATIONS ON CACHE BOOL "Build ffmpeg with architecture-specific optimizations" FORCE)
+	else()
+		message(WARNING "Assembler not found. Building ffmpeg without ${CMAKE_SYSTEM_PROCESSOR} optimizations")
+	endif()
+endif()
+
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*")
-	find_program(YASM_EXECUTABLE yasm REQUIRED)
-	enable_language(C ASM_NASM)
-	set(ASM_ARCH="-m amd64")
+		set(ASM_ARCH="-m amd64")
 	if (CMAKE_HOST_SYSTEM_NAME STREQUAL "CYGWIN.*|Windows.*|MSYS.*")
 		set(CMAKE_ASM_NASM_OBJECT_FORMAT win64)
 	elseif (UNIX AND NOT APPLE)
@@ -20,11 +37,12 @@ elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "x86.*|i686.*|i386.*")
 	set(ASM_ARCH="-m x86")
 	if (CMAKE_HOST_SYSTEM_NAME STREQUAL "CYGWIN.*|Windows.*|MSYS.*")
 		set(CMAKE_ASM_NASM_OBJECT_FORMAT win32)
-	elseif (CMAKE_HOST_SYSTEM_NAME STREQUAL "Android.*|DragonFly.*|FreeBSD.*|Linux.*|NetBSD.*|OpenBSD.*|SunOS.*")
+	elseif (UNIX AND NOT APPLE)
 		set(CMAKE_ASM_NASM_OBJECT_FORMAT elf32)
 	endif()
 elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*") # if there are no machine/processor-specific
-	enable_language(C ASM)											# GNU as flags needed, I could make this an "else"
+	enable_language(C ASM)											# GNU as flags needed, I could make this an 	
+																	# "else"
 	# To do - set any GNU as flags that are needed, presumably as CMAKE_ASM_FLAGS
 endif()
 
