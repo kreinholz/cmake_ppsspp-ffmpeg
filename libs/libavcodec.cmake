@@ -177,7 +177,7 @@ if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
 	if (MSVC) # if LIBC_MSVCRT present; there may be a better/more accurate way to test for this
 		list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/file_open.c)
 	endif()
-else() # To Do; threads should actually be tested for, although a POSIX system without threads?
+elseif (Threads_FOUND) # PPSSPP root CMakeLists.txt has 'include(FindThreads)' so we should be able to call this here
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread.c)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread_slice.c)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread_frame.c)

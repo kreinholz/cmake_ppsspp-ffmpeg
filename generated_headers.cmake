@@ -1,16 +1,13 @@
-# Before we compile ffmpeg libs, we need to generate config.h, libavutil/avconfig.h, and libavutil/ffversion.h.
-
-# I've already accomplished this for the simpler libavutil/avconfig.h, so use that as an example for the more complex config.h generated header file. ffversion.h just requires translating some logic from version.sh to pretty print git info for the source directory.
+# Before we compile ffmpeg libs, we need to generate config.h/config.asm, libavutil/avconfig.h, and libavutil/ffversion.h.
 
 # Generate config.h file
-# hardcoded hacks for testing purposes
-# To Do - set tests to actually derive the variables
+include(CheckCSourceCompiles)
 
 set(extern_prefix \"\")
 set(extern_asm "")
 set(build_suffix \"\")
-set(SLIBSUF \".so\")	# Obviously this can't be hardcoded as Windows uses ".dll" or ".lib" for example
-set(sws_max_filter_size 256)
+set(SLIBSUF \"${CMAKE_SHARED_LIBRARY_SUFFIX}\")
+set(sws_max_filter_size 256)	# I was originally against hardcoding, but line 3055 of configure hardcodes '256'
 
 # Test for restrict command
 # To Do - if ffmpeg needs this, add a compiler flag such as -std=c99 to the build environment
@@ -18,6 +15,104 @@ if (c_restrict IN_LIST CMAKE_C_COMPILE_FEATURES)
 	set(_RESTRICT restrict)
 else()
 	set(_RESTRICT "")
+endif()
+
+# Test for FAST_UNALIGNED
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*|ARM64.*|arm64.*|aarch64.*")
+	set(FAST_UNALIGNED 1)
+else()
+	set(FAST_UNALIGNED 0)
+endif()
+
+# Set the appropriate CPU variables
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*")
+	set(ARCH_AARCH64 1)
+else()
+	set(ARCH_AARCH64 0)
+endif()
+# Note - skipping Alpha
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm.*")
+	set(ARCH_ARM 1)
+else()
+	set(ARCH_ARM 0)
+endif()
+# Note - skipping Ardueno and other exotic CPU types, plus really old ones like m68k "classic" Macintosh chips
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "mips.*")
+	set(ARCH_MIPS 1)
+else()
+	set(ARCH_MIPS 0)
+endif()
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "mips64.*")
+	set(ARCH_MIPS64 1)
+else()
+	set(ARCH_MIPS64 0)
+endif()
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*")
+	set(ARCH_X86_64 1)
+else()
+	set(ARCH_X86_64 0)
+endif()
+
+# Start of some relevant 'HAVE_' tests
+
+# The following 15-line function was written by Copilot (AI)
+function(test_arm_support FLAG INSTRUCTION RESULT_VAR)
+	# Save original CMAKE_REQUIRED_FLAGS
+	set(_OLD_FLAGS "${CMAKE_REQUIRED_FLAGS}")
+	# Add test flag
+	set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} ${FLAG}")
+	# Try compiling a small snippet that uses the instruction
+	check_c_source_compiles("
+		int main(void) {
+			__asm__ volatile(\"${INSTRUCTION}\");
+			return 0;
+		}
+	" ${RESULT_VAR})
+	# Restore original flags
+	set(CMAKE_REQUIRED_FLAGS "${__OLD_FLAGS}")
+endfunction()
+
+# The following tests, which use Copilot's function, are taken straight from ffmpeg-3.0.2's configure script
+test_arm_support("-mfpu=neon" "vadd.i16 q0, q0, q0" HAVE_NEON)
+if(HAVE_NEON)
+	set(HAVE_NEON 1)
+else()
+	set(HAVE_NEON 0)
+endif()
+
+test_arm_support("-mfpu=armv6" "sadd16 r0, r0, r0" HAVE_ARMV6)
+if(HAVE_ARMV6 OR CMAKE_SYSTEM_PROCESSOR MATCHES "armv6.*")
+	set(HAVE_ARMV6 1)
+else()
+	set(HAVE_ARMV6 0)
+endif()
+
+test_arm_support("-mfpu=armv6t2" "movt r0, #0" HAVE_ARMV6T2)
+if(HAVE_ARMV6T2 OR CMAKE_SYSTEM_PROCESSOR MATCHES "armv6t2.*")
+	set(HAVE_ARMV6T2 1)
+else()
+	set(HAVE_ARMV6T2 0)
+endif()
+
+test_arm_support("-mfpu=vfp" "fadds s0, s0, s0" HAVE_VFP)
+if(HAVE_VFP)
+	set(HAVE_VFP 1)
+else()
+	set(HAVE_VFP 0)
+endif()
+
+test_arm_support("-mfpu=vfp" "vmov.f32 s0, #1.0" HAVE_VFPV3)
+if(HAVE_VFPV3)
+	set(HAVE_VFPV3 1)
+else()
+	set(HAVE_VFPV3 0)
+endif()
+
+test_arm_support("-mfpu=setend" "setend be" HAVE_SETEND)
+if(HAVE_SETEND)
+	set(HAVE_SETEND 1)
+else()
+	set(HAVE_SETEND 0)
 endif()
 
 file(CONFIGURE
@@ -39,17 +134,17 @@ file(CONFIGURE
 #define SLIBSUF ${SLIBSUF}
 #define HAVE_MMX2 HAVE_MMXEXT
 #define SWS_MAX_FILTER_SIZE ${sws_max_filter_size}
-#define ARCH_AARCH64 0
+#define ARCH_AARCH64 ${ARCH_AARCH64}
 #define ARCH_ALPHA 0
-#define ARCH_ARM 0
+#define ARCH_ARM ${ARCH_ARM}
 #define ARCH_AVR32 0
 #define ARCH_AVR32_AP 0
 #define ARCH_AVR32_UC 0
 #define ARCH_BFIN 0
 #define ARCH_IA64 0
 #define ARCH_M68K 0
-#define ARCH_MIPS 0
-#define ARCH_MIPS64 0
+#define ARCH_MIPS ${ARCH_MIPS}
+#define ARCH_MIPS64 ${ARCH_MIPS64}
 #define ARCH_PARISC 0
 #define ARCH_PPC 0
 #define ARCH_PPC64 0
@@ -60,17 +155,17 @@ file(CONFIGURE
 #define ARCH_TILEGX 0
 #define ARCH_TILEPRO 0
 #define ARCH_TOMI 0
-#define ARCH_X86 0
-#define ARCH_X86_32 0
-#define ARCH_X86_64 1
+#define ARCH_X86 ${ARCH_X86}
+#define ARCH_X86_32 ${ARCH_X86}
+#define ARCH_X86_64 ${ARCH_X86_64}
 #define HAVE_ARMV5TE 0
-#define HAVE_ARMV6 0
-#define HAVE_ARMV6T2 0
-#define HAVE_ARMV8 0
-#define HAVE_NEON 0
-#define HAVE_VFP 0
-#define HAVE_VFPV3 0
-#define HAVE_SETEND 0
+#define HAVE_ARMV6 ${HAVE_ARMV6}
+#define HAVE_ARMV6T2 ${HAVE_ARMV6T2}
+#define HAVE_ARMV8 ${ARCH_AARCH64}
+#define HAVE_NEON ${HAVE_NEON}
+#define HAVE_VFP ${HAVE_VFP}
+#define HAVE_VFPV3 ${HAVE_VFPV3}
+#define HAVE_SETEND ${HAVE_SETEND}
 #define HAVE_ALTIVEC 0
 #define HAVE_DCBZL 0
 #define HAVE_LDBRX 0
@@ -220,7 +315,7 @@ file(CONFIGURE
 #define HAVE_SYMVER 1
 #define HAVE_YASM 1
 #define HAVE_BIGENDIAN 0
-#define HAVE_FAST_UNALIGNED 1
+#define HAVE_FAST_UNALIGNED ${FAST_UNALIGNED}
 #define HAVE_INCOMPATIBLE_LIBAV_ABI 0
 #define HAVE_ALSA_ASOUNDLIB_H 0
 #define HAVE_ALTIVEC_H 0
@@ -2131,12 +2226,7 @@ else()
 	set(IS_BIGENDIAN 0)
 endif()
 
-# Test for FAST_UNALIGNED
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*|ARM64.*|arm64.*|aarch64.*")
-	set(HAS_FAST_UNALIGNED 1)
-else()
-	set(HAS_FAST_UNALIGNED 0)
-endif()
+
 
 file(CONFIGURE
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/libavutil/avconfig.h"
@@ -2146,7 +2236,7 @@ file(CONFIGURE
 #ifndef AVUTIL_AVCONFIG_H
 #define AVUTIL_AVCONFIG_H
 #define AV_HAVE_BIGENDIAN ${IS_BIGENDIAN}
-#define AV_HAVE_FAST_UNALIGNED ${HAS_FAST_UNALIGNED}
+#define AV_HAVE_FAST_UNALIGNED ${FAST_UNALIGNED}
 #define AV_HAVE_INCOMPATIBLE_LIBAV_ABI 0
 #endif /* AVUTIL_AVCONFIG_H */
 "
