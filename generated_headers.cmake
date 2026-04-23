@@ -52,6 +52,11 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*")
 else()
 	set(ARCH_X86_64 0)
 endif()
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86.*|i686.*|i386.*")
+	set(ARCH_X86 1)
+else()
+	set(ARCH_X86 0)
+endif()
 
 # Start of some relevant 'HAVE_' tests
 
@@ -72,48 +77,86 @@ function(test_arm_support FLAG INSTRUCTION RESULT_VAR)
 	set(CMAKE_REQUIRED_FLAGS "${__OLD_FLAGS}")
 endfunction()
 
+# Modified test for x86 and other features, inspired by the above Copilot (AI) function
+function(test_compiler_support FLAG TEST_CODE RESULT_VAR)
+	# Save original CMAKE_REQUIRED_FLAGS
+	set(_OLD_FLAGS "${CMAKE_REQUIRED_FLAGS}")
+	# Add test flag
+	set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} ${FLAG}")
+	# Try compiling a small snippet that uses the instruction
+	check_c_source_compiles("${TEST_CODE}" "${RESULT_VAR}")
+	# Restore original flags
+	set(CMAKE_REQUIRED_FLAGS "${__OLD_FLAGS}")
+endfunction()
+
+# Very short convenience function (written by me) to set specified variable to "1" if defined, "0" if undefined
+function(assign_value INPUT_VAR)
+	if(${INPUT_VAR})
+		set(${INPUT_VAR} 1 PARENT_SCOPE)
+	else()
+		set(${INPUT_VAR} 0 PARENT_SCOPE)
+	endif()
+endfunction()
+
 # The following tests, which use Copilot's function, are taken straight from ffmpeg-3.0.2's configure script
-test_arm_support("-mfpu=neon" "vadd.i16 q0, q0, q0" HAVE_NEON)
-if(HAVE_NEON)
-	set(HAVE_NEON 1)
-else()
-	set(HAVE_NEON 0)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm.*")
+	test_arm_support("-mfpu=neon" "vadd.i16 q0, q0, q0" HAVE_NEON)
+	test_arm_support("-mfpu=armv6" "sadd16 r0, r0, r0" HAVE_ARMV6)
+	test_arm_support("-mfpu=armv6t2" "movt r0, #0" HAVE_ARMV6T2)
+	test_arm_support("-mfpu=vfp" "fadds s0, s0, s0" HAVE_VFP)
+	test_arm_support("-mfpu=vfp" "vmov.f32 s0, #1.0" HAVE_VFPV3)
+	test_arm_support("-mfpu=setend" "setend be" HAVE_SETEND)
+endif()
+# Note - we only want to run the above tests on Arm; but we still want to assign a "1" or "0" value in config.h
+assign_value(HAVE_NEON)
+assign_value(HAVE_ARMV6)
+assign_value(HAVE_ARMV6T2)
+assign_value(HAVE_VFP)
+assign_value(HAVE_VFPV3)
+assign_value(HAVE_SETEND)
+
+# The following are all PPC features--since we're not building PPSSPP on Big Endian, we can hardcode these to "0"
+#define HAVE_ALTIVEC 0
+#define HAVE_DCBZL 0
+#define HAVE_LDBRX 0
+#define HAVE_POWER8 0
+#define HAVE_PPC4XX 0
+#define HAVE_VSX 0
+
+# x86(_64) specific features
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*")
+	test_compiler_support("-msse" "#include <xmmintrin.h>\nint main(void){__m128 a=_mm_setzero_ps();return 0;}" HAVE_SSE)
+	test_compiler_support("-msse2" "#include <emmintrin.h>\nint main(void){ __m128d a=_mm_setzero_pd();return 0;}" HAVE_SSE2)
+	test_compiler_support("-msse3" "#include <pmmintrin.h>\nint main(void){__m128 a=_mm_hadd_ps(_mm_setzero_ps(),_mm_setzero_ps());return 0;}" HAVE_SSE3)
+	test_compiler_support("-msse4.1" "#include <smmintrin.h>\nint main(void){__m128i a=_mm_blend_epi16(_mm_setzero_si128(),_mm_setzero_si128(),0xF0);return 0;}" HAVE_SSE4)
+	test_compiler_support("-msse4.2" "#include <nmmintrin.h>\nint main(void){int r=_mm_crc32_u32(0,0);return 0;}" HAVE_SSE42)
+	test_compiler_support("-mavx" "#include <immintrin.h>\nint main(void){__m256 a=_mm256_setzero_ps();return 0;}" HAVE_AVX)
+	test_compiler_support("-mavx2" "#include <immintrin.h>\nint main(void){__m256i a=_mm256_setzero_si256();return 0;}" HAVE_AVX2)
+	test_compiler_support("-mmmx" "#include <mmintrin.h>\nint main(void){_mm_empty();return 0;}" HAVE_MMX)
+	test_compiler_support("-mmmx" "#include <mmintrin.h>\n#include <xmmintrin.h>\nint main(void){__m64 a = _mm_setzero_si64();return 0;}" HAVE_MMXEXT)
+	test_compiler_support("-mfma" "#include <immintrin.h>\nint main(void){__m256 a, b, c;__mm256 r = _mm256_fmadd_ps(a, b, c);return 0;}" HAVE_FMA3)
 endif()
 
-test_arm_support("-mfpu=armv6" "sadd16 r0, r0, r0" HAVE_ARMV6)
-if(HAVE_ARMV6 OR CMAKE_SYSTEM_PROCESSOR MATCHES "armv6.*")
-	set(HAVE_ARMV6 1)
-else()
-	set(HAVE_ARMV6 0)
-endif()
+#define HAVE_FMA3 1	# FIX THIS: I'm pretty sure my CPU supports FMA3, so the test itself is wrong or I'm single lining it wrong...
+#define HAVE_FMA4 1
+#define HAVE_AESNI 1
+#define HAVE_AMD3DNOW ${HAVE_AMD3DNOW}
+#define HAVE_AMD3DNOWEXT ${HAVE_AMD3DNOWEXT}
+#define HAVE_SSSE3 1
+#define HAVE_XOP 1
+#define HAVE_CPUNOP 1
 
-test_arm_support("-mfpu=armv6t2" "movt r0, #0" HAVE_ARMV6T2)
-if(HAVE_ARMV6T2 OR CMAKE_SYSTEM_PROCESSOR MATCHES "armv6t2.*")
-	set(HAVE_ARMV6T2 1)
-else()
-	set(HAVE_ARMV6T2 0)
-endif()
-
-test_arm_support("-mfpu=vfp" "fadds s0, s0, s0" HAVE_VFP)
-if(HAVE_VFP)
-	set(HAVE_VFP 1)
-else()
-	set(HAVE_VFP 0)
-endif()
-
-test_arm_support("-mfpu=vfp" "vmov.f32 s0, #1.0" HAVE_VFPV3)
-if(HAVE_VFPV3)
-	set(HAVE_VFPV3 1)
-else()
-	set(HAVE_VFPV3 0)
-endif()
-
-test_arm_support("-mfpu=setend" "setend be" HAVE_SETEND)
-if(HAVE_SETEND)
-	set(HAVE_SETEND 1)
-else()
-	set(HAVE_SETEND 0)
-endif()
+assign_value(HAVE_AMD3DNOW)
+assign_value(HAVE_AMD3DNOWEXT)
+assign_value(HAVE_MMX)
+assign_value(HAVE_MMXEXT)
+assign_value(HAVE_SSE)
+assign_value(HAVE_SSE2)
+assign_value(HAVE_SSE3)
+assign_value(HAVE_SSE4)
+assign_value(HAVE_SSE42)
+assign_value(HAVE_AVX)
+assign_value(HAVE_AVX2)
 
 file(CONFIGURE
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/config.h"
@@ -173,23 +216,23 @@ file(CONFIGURE
 #define HAVE_PPC4XX 0
 #define HAVE_VSX 0
 #define HAVE_AESNI 1
-#define HAVE_AMD3DNOW 1
-#define HAVE_AMD3DNOWEXT 1
-#define HAVE_AVX 1
-#define HAVE_AVX2 1
+#define HAVE_AMD3DNOW ${HAVE_AMD3DNOW}
+#define HAVE_AMD3DNOWEXT ${HAVE_AMD3DNOWEXT}
+#define HAVE_AVX ${HAVE_AVX}
+#define HAVE_AVX2 ${HAVE_AVX2}
 #define HAVE_FMA3 1
 #define HAVE_FMA4 1
-#define HAVE_MMX 1
-#define HAVE_MMXEXT 1
-#define HAVE_SSE 1
-#define HAVE_SSE2 1
-#define HAVE_SSE3 1
-#define HAVE_SSE4 1
-#define HAVE_SSE42 1
+#define HAVE_MMX ${HAVE_MMX}
+#define HAVE_MMXEXT ${HAVE_MMXEXT}
+#define HAVE_SSE ${HAVE_SSE}
+#define HAVE_SSE2 ${HAVE_SSE2}
+#define HAVE_SSE3 ${HAVE_SSE3}
+#define HAVE_SSE4 ${HAVE_SSE4}
+#define HAVE_SSE42 ${HAVE_SSE42}
 #define HAVE_SSSE3 1
 #define HAVE_XOP 1
 #define HAVE_CPUNOP 1
-#define HAVE_I686 1
+#define HAVE_I686 ${ARCH_X86_64}
 #define HAVE_MIPSFPU 0
 #define HAVE_MIPS32R2 0
 #define HAVE_MIPS32R5 0
