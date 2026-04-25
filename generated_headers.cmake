@@ -20,13 +20,16 @@ endif()
 # Test for FAST_UNALIGNED
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*|ARM64.*|arm64.*|aarch64.*")
 	set(FAST_UNALIGNED 1)
+	set(ALIGNED_STACK 1)
 else()
 	set(FAST_UNALIGNED 0)
+	set(ALIGNED_STACK 0)
 endif()
 
 # Set the appropriate CPU variables
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*")
 	set(ARCH_AARCH64 1)
+	set(FAST_64BIT 1)
 else()
 	set(ARCH_AARCH64 0)
 endif()
@@ -49,11 +52,14 @@ else()
 endif()
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*")
 	set(ARCH_X86_64 1)
+	set(FAST_64BIT 1)
+	set(HAVE_FAST_CMOV 1)
 else()
 	set(ARCH_X86_64 0)
 endif()
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86.*|i686.*|i386.*")
 	set(ARCH_X86 1)
+	set(HAVE_FAST_CMOV 1)
 else()
 	set(ARCH_X86 0)
 endif()
@@ -98,6 +104,9 @@ function(assign_value INPUT_VAR)
 	endif()
 endfunction()
 
+assign_value(FAST_64BIT)
+assign_value(HAVE_FAST_CMOV)
+
 # The following tests, which use Copilot's function, are taken straight from ffmpeg-3.0.2's configure script
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm.*")
 	test_arm_support("-mfpu=neon" "vadd.i16 q0, q0, q0" HAVE_NEON)
@@ -115,7 +124,7 @@ assign_value(HAVE_VFP)
 assign_value(HAVE_VFPV3)
 assign_value(HAVE_SETEND)
 
-# The following are all PPC features--since we're not building PPSSPP on Big Endian, we can hardcode these to "0"
+# The following are all PPC features--since we're not building PPSSPP on Big Endian, so we can hardcode these to "0"
 #define HAVE_ALTIVEC 0
 #define HAVE_DCBZL 0
 #define HAVE_LDBRX 0
@@ -123,31 +132,34 @@ assign_value(HAVE_SETEND)
 #define HAVE_PPC4XX 0
 #define HAVE_VSX 0
 
-# x86(_64) specific features
+# x86(_64) specific features - compiler test code suggested by Copilot AI
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*")
+	test_compiler_support("-maes" "#include <immintrin.h>\nint main(void){_mm_aesenc_si128(_mm_setzero_si128(), _mm_setzero_si128());return 0;}" HAVE_AESNI)
+	test_compiler_support("" "int main(void){__asm__ __volatile__(\"pfadd %%mm0, %%mm1\" ::: \"mm0\", \"mm1\");return 0;}" HAVE_AMD3DNOW)
+	test_compiler_support("" "int main(void){__asm__ __volatile__(\"pavgusb %%mm0, %%mm1\\n\" ::: \"mm0\", \"mm1\");return 0;}" HAVE_AMD3DNOWEXT)
+	test_compiler_support("-mavx" "#include <immintrin.h>\nint main(void){__m256 a=_mm256_setzero_ps();return 0;}" HAVE_AVX)
+	test_compiler_support("-mavx2" "#include <immintrin.h>\nint main(void){__m256i a=_mm256_setzero_si256();return 0;}" HAVE_AVX2)
+	test_compiler_support("-mfma" "#include <immintrin.h>\nint main(void){_mm256_fmadd_ps(_mm256_set1_ps(1.0f), _mm256_set1_ps(2.0f), _mm256_set1_ps(3.0f));return 0;}" HAVE_FMA3)
+	test_compiler_support("-mfma" "#include <immintrin.h>\nint main(void){_mm256_macc_ps(_mm256_set1_ps(1.0f), _mm256_set1_ps(2.0f), _mm256_set1_ps(3.0f));return 0;}" HAVE_FMA4)
+	test_compiler_support("-mmmx" "#include <mmintrin.h>\nint main(void){_mm_empty();return 0;}" HAVE_MMX)
+	test_compiler_support("-mmmx" "#include <mmintrin.h>\n#include <xmmintrin.h>\nint main(void){__m64 a = _mm_setzero_si64();return 0;}" HAVE_MMXEXT)
 	test_compiler_support("-msse" "#include <xmmintrin.h>\nint main(void){__m128 a=_mm_setzero_ps();return 0;}" HAVE_SSE)
 	test_compiler_support("-msse2" "#include <emmintrin.h>\nint main(void){ __m128d a=_mm_setzero_pd();return 0;}" HAVE_SSE2)
 	test_compiler_support("-msse3" "#include <pmmintrin.h>\nint main(void){__m128 a=_mm_hadd_ps(_mm_setzero_ps(),_mm_setzero_ps());return 0;}" HAVE_SSE3)
 	test_compiler_support("-msse4.1" "#include <smmintrin.h>\nint main(void){__m128i a=_mm_blend_epi16(_mm_setzero_si128(),_mm_setzero_si128(),0xF0);return 0;}" HAVE_SSE4)
 	test_compiler_support("-msse4.2" "#include <nmmintrin.h>\nint main(void){int r=_mm_crc32_u32(0,0);return 0;}" HAVE_SSE42)
-	test_compiler_support("-mavx" "#include <immintrin.h>\nint main(void){__m256 a=_mm256_setzero_ps();return 0;}" HAVE_AVX)
-	test_compiler_support("-mavx2" "#include <immintrin.h>\nint main(void){__m256i a=_mm256_setzero_si256();return 0;}" HAVE_AVX2)
-	test_compiler_support("-mmmx" "#include <mmintrin.h>\nint main(void){_mm_empty();return 0;}" HAVE_MMX)
-	test_compiler_support("-mmmx" "#include <mmintrin.h>\n#include <xmmintrin.h>\nint main(void){__m64 a = _mm_setzero_si64();return 0;}" HAVE_MMXEXT)
-	test_compiler_support("-mfma" "#include <immintrin.h>\nint main(void){__m256 a, b, c;__mm256 r = _mm256_fmadd_ps(a, b, c);return 0;}" HAVE_FMA3)
+	test_compiler_support("-mssse3" "#include <immintrin.h>\nint main(void){_mm_abs_epi8(_mm_set1_epi8(-1));return 0;}" HAVE_SSSE3)
+	test_compiler_support("-mxop" "#include <immintrin.h>\nint main(void){_mm256_roti_epi32(_mm256_set1_epi32(1), 1);return 0;}" HAVE_XOP)
+	test_compiler_support("" "int main(void){__asm__ __volatile__(\"nop\");return 0;}" HAVE_CPUNOP)
 endif()
-
-#define HAVE_FMA3 1	# FIX THIS: I'm pretty sure my CPU supports FMA3, so the test itself is wrong or I'm single lining it wrong...
-#define HAVE_FMA4 1
-#define HAVE_AESNI 1
-#define HAVE_AMD3DNOW ${HAVE_AMD3DNOW}
-#define HAVE_AMD3DNOWEXT ${HAVE_AMD3DNOWEXT}
-#define HAVE_SSSE3 1
-#define HAVE_XOP 1
-#define HAVE_CPUNOP 1
-
+# Note - we only want to run the above tests on x86(_64); but we still want to assign a "1" or "0" value in config.h
+assign_value(HAVE_AESNI)
 assign_value(HAVE_AMD3DNOW)
 assign_value(HAVE_AMD3DNOWEXT)
+assign_value(HAVE_AVX)
+assign_value(HAVE_AVX2)
+assign_value(HAVE_FMA3)
+assign_value(HAVE_FMA4)
 assign_value(HAVE_MMX)
 assign_value(HAVE_MMXEXT)
 assign_value(HAVE_SSE)
@@ -155,8 +167,206 @@ assign_value(HAVE_SSE2)
 assign_value(HAVE_SSE3)
 assign_value(HAVE_SSE4)
 assign_value(HAVE_SSE42)
-assign_value(HAVE_AVX)
-assign_value(HAVE_AVX2)
+assign_value(HAVE_SSSE3)
+assign_value(HAVE_XOP)
+assign_value(HAVE_CPUNOP)
+
+# MIPS specific features - compiler tests suggested by Copilot AI (only the last 4 actually do anything meaningful)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "mips.*|mips64.*")
+	test_compiler_support("-mfpu=fp64" "int main(void){return 0;}" HAVE_MIPSFPU)
+	test_compiler_support("-march=mips32r2" "int main(void){return 0;}" HAVE_MIPS32R2)
+	test_compiler_support("-march=mips32r5" "int main(void){return 0;}" HAVE_MIPS32R5)
+	test_compiler_support("-march=mips64r2" "int main(void){return 0;}" HAVE_MIPS64R2)
+	test_compiler_support("-march=mips32r6" "int main(void){return 0;}" HAVE_MIPS32R6)
+	test_compiler_support("-march=mips64r6" "int main(void){return 0;}" HAVE_MIPS64R6)
+	test_compiler_support("-mdsp" "int main(void){return 0;}" HAVE_MIPSDSP)
+	test_compiler_support("-mdspr2" "int main(void){return 0;}" HAVE_MIPSDSPR2)
+	test_compiler_support("" "#include <msa.h>\nint main(void){v16i8 a = __builtin_msa_fill_b(1);return 0;}" HAVE_MSA)
+	test_compiler_support("" "#include <loongson2.h>\nint main(void){__m64 x = __builtin_loongson_paddb(0, 0);return 0;}" HAVE_LOONGSON2)
+	test_compiler_support("" "#include <loongson3a.h>\nint main(void){__m128i x = __builtin_loongson_vaddb(0, 0);return 0;}" HAVE_LOONGSON3)
+	test_compiler_support("" "#include <mmi.h>\nint main(void){__mmi_d v = {0};return 0;}" HAVE_MMI)
+endif()
+# Note - we only want to run the above tests on mips; but we still want to assign a "1" or "0" value in config.h
+assign_value(HAVE_MIPSFPU)
+assign_value(HAVE_MIPS32R2)
+assign_value(HAVE_MIPS32R5)
+assign_value(HAVE_MIPS64R2)
+assign_value(HAVE_MIPS32R6)
+assign_value(HAVE_MIPS64R6)
+assign_value(HAVE_MIPSDSP)
+assign_value(HAVE_MIPSDSPR2)
+assign_value(HAVE_MSA)
+assign_value(HAVE_LOONGSON2)
+assign_value(HAVE_LOONGSON3)
+assign_value(HAVE_MMI)
+
+# alignment checks--function written by Copilot AI
+# Function to check alignment support for GCC/Clang and MSVC
+function(check_alignment ALIGNMENT VAR_NAME)
+    set(SOURCE_CODE "
+        #include <stdio.h>
+        #include <stdint.h>
+
+        #if defined(_MSC_VER)
+            __declspec(align(${ALIGNMENT})) struct AlignedStruct {
+                char c;
+            };
+        #else
+            struct __attribute__((aligned(${ALIGNMENT}))) AlignedStruct {
+                char c;
+            };
+        #endif
+
+        int main(void) {
+            struct AlignedStruct s;
+            // Ensure alignment is applied (compile-time check)
+            if (((uintptr_t)&s) % ${ALIGNMENT} != 0) return 1;
+            return 0;
+        }
+    ")
+    check_c_source_compiles("${SOURCE_CODE}" ${VAR_NAME})
+endfunction()
+
+# Check for 8, 16, and 32-byte alignment
+check_alignment(8  HAVE_LOCAL_ALIGNED_8)
+check_alignment(16 HAVE_LOCAL_ALIGNED_16)
+check_alignment(32 HAVE_LOCAL_ALIGNED_32)
+
+# check for simd_align_16 the same was as ffmpeg's configure does
+if(HAVE_NEON OR HAVE_SSE)
+	set(HAVE_SIMD_ALIGN_16 1)
+else()
+	set(HAVE_SIMD_ALIGN_16 0)
+endif()
+
+# tests for symver_asm_label and gnu_asm suggested by Gemini AI
+test_compiler_support("-fPIC" "void foo(void){}\n__asm__(\".symver foo, foo@VERS_1.1\");\nint main(void){return 0;}" HAVE_SYMVER_ASM_LABEL)
+test_compiler_support("" "void foo(void){}\n__asm__(\".symver foo, foo@@VERS_1.0\");\nint main(void){return 0;}" HAVE_GNU_ASM)
+if(HAVE_SYMVER_ASM_LABEL OR HAVE_GNU_ASM)
+	set(HAVE_SYMVER 1)
+else()
+	set(HAVE_SYMVER 0)
+endif()
+
+# More tests--these came from ffmpeg's configure script EXCEPT missing header info for atomic_compare_exchange & sync_val_compare_and_swap which came from Google
+include(CheckSymbolExists)
+check_symbol_exists(atomic_cas_ptr "atomic.h" HAVE_ATOMIC_CAS_PTR)
+check_symbol_exists(atomic_compare_exchange_strong "stdatomic.h" HAVE_ATOMIC_COMPARE_EXCHANGE)
+check_symbol_exists(__machine_rw_barrier "mbarrier.h" HAVE_MACHINE_RW_BARRIER)
+check_symbol_exists(MemoryBarrier "windows.h" HAVE_MEMORYBARRIER)
+check_symbol_exists(SA_RESTART "signal.h" HAVE_SARESTART)
+check_symbol_exists(gmtime_r "time.h" HAVE_GMTIME_R)
+check_symbol_exists(localtime_r "time.h" HAVE_LOCALTIME_R)
+check_symbol_exists(__rdtsc "intrin.h" HAVE_RDTSC)
+check_symbol_exists(_mm_empty "mmintrin.h" HAVE_MM_EMPTY)
+# The following is unreliable with check_symbol_exists, so we have to attempt to compile a code snippet
+test_compiler_support("" "#include <stdint.h>\nint main(){volatile int val = 0;\n__sync_val_compare_and_swap(&val, 0, 1);\n;return 0;}" HAVE_SYNC_VAL_COMPARE_AND_SWAP)
+
+assign_value(HAVE_ATOMIC_CAS_PTR)
+assign_value(HAVE_ATOMIC_COMPARE_EXCHANGE)
+assign_value(HAVE_MACHINE_RW_BARRIER)
+assign_value(HAVE_MEMORYBARRIER)
+assign_value(HAVE_MM_EMPTY)
+assign_value(HAVE_RDTSC)
+assign_value(HAVE_SARESTART)
+assign_value(HAVE_SYNC_VAL_COMPARE_AND_SWAP)
+# Conditionals to apply the above tests' results per ffmpeg's configure conditionals under # threading support
+if(HAVE_SYNC_VAL_COMPARE_AND_SWAP OR HAVE_ATOMIC_COMPARE_EXCHANGE)
+	set(HAVE_ATOMICS_GCC 1)
+else()
+	set(HAVE_ATOMIC_GCC 0)
+endif()
+if(HAVE_ATOMIC_CAS_PTR OR HAVE_MACHINE_RW_BARRIER)
+	set(HAVE_ATOMICS_SUNCC 1)
+else()
+	set(HAVE_ATOMICS_SUNCC 0)
+endif()
+if(HAVE_MEMORYBARRIER)
+	set(HAVE_ATOMICS_WIN32 1)
+else()
+	set(HAVE_ATOMICS_WIN32 0)
+endif()
+if(HAVE_ATOMICS_GCC OR HAVE_ATOMICS_SUNCC OR HAVE_ATOMICS_WIN32)
+	set(HAVE_ATOMICS_NATIVE 1)
+else()
+	set(HAVE_ATOMICS_NATIVE 0)
+endif()
+
+# Function checks - cabs and cexp
+include(CheckFunctionExists)
+check_function_exists(cabs HAVE_CABS)
+check_function_exists(cexp HAVE_CEXP)
+assign_value(HAVE_CABS)
+assign_value(HAVE_CEXP)
+
+test_compiler_support("" "int main(void){int x = 0;\nasm(\"nop\");\nreturn x;}" HAVE_INLINE_ASM)
+assign_value(HAVE_INLINE_ASM)
+
+# find_program(YASM_EXECUTABLE yasm) was already set in CMakeLists.txt so we can use those results here
+if(YASM_EXECUTABLE)	
+	set(HAVE_YASM 1)
+else()
+	set(HAVE_YASM 0)
+endif()
+
+include(CheckIncludeFile)
+# Check for presence of various headers on system--list taken from ffmpeg's configure
+function(check_listed_includes)
+	foreach(header alsa_asoundlib_h altivec_h arpa_inet_h asm_types_h cdio_paranoia_h cdio_paranoia_paranoia_h dev_bktr_ioctl_bt848_h dev_bktr_ioctl_meteor_h dev_ic_bt8xx_h dev_video_bktr_ioctl_bt848_h dev_video_meteor_ioctl_meteor_h direct_h dirent_h dlfcn_h d3d11_h dxva_h ES2_gl_h gsm_h io_h mach_mach_time_h machine_ioctl_bt848_h machine_ioctl_meteor_h malloc_h opencv2_core_core_c_h openjpeg_2_1_openjpeg_h openjpeg_2_0_openjpeg_h openjpeg_1_5_openjpeg_h OpenGL_gl3_h poll_h sndio_h soundcard_h sys_mman_h sys_param_h sys_resource_h sys_select_h sys_soundcard_h sys_time_h sys_un_h sys_videoio_h termios_h udplite_h unistd_h valgrind_valgrind_h windows_h winsock2_h)
+		# convert header item to proper header format
+		string(REGEX REPLACE "_h" ".h" header_formatted ${header})
+    	# Create a RESULT_VAR, properly formatted
+    	string(TOUPPER "${header}" uppercase_header)
+    	set(RESULT_VAR "HAVE_${uppercase_header}")
+    	# Look for the header
+    	check_include_file(${header_formatted} ${RESULT_VAR})
+    	assign_value(${RESULT_VAR} PARENT_SCOPE)
+	endforeach()
+endfunction()
+check_listed_includes()
+
+# Math symbols can't be reliably tested with check_symbol_exists, so we have to use check_function_exists instead
+# Combined ffmpeg's configure math_func and system_funcs lists here since the check is the same
+# Note: I removed gmtime_r & localtime_r from this list as it was already tested for above
+set(CMAKE_REQUIRED_LIBRARIES m)
+foreach(math_func atanf atan2f cbrt cbrtf copysign cosf erf exp2 exp2f expf hypot isfinite isinf isnan ldexpf llrint llrintf log2 log2f log10f lrint lrintf powf rint round roundf sinf trunc truncf access aligned_malloc arc4random clock_gettime closesocket CommandLineToArgvW CoTaskMemFree CryptGenRandom dlopen fcntl flt_lim fork getaddrinfo gethrtime getopt GetProcessAffinityMask GetProcessMemoryInfo GetProcessTimes getrusage GetSystemTimeAsFileTime gettimeofday glob glXGetProcAddress inet_aton isatty jack_port_get_latency_range kbhit lstat lzo1x_999_compress mach_absolute_time MapViewOfFile memalign mkstemp mmap mprotect nanosleep PeekNamedPipe posix_memalign pthread_cancel sched_getaffinity SetConsoleTextAttribute SetConsoleCtrlHandler setmode setrlimit Sleep strerror_r sysconf sysctl usleep UTGetOSTypeFromString VirtualAlloc wglGetProcAddress)
+    # Create a RESULT_VAR, properly formatted
+    string(TOUPPER "${math_func}" uppercase_math_func)
+    set(RESULT_VAR "HAVE_${uppercase_math_func}")
+    # Check whether the math function exists
+    check_function_exists(${math_func} ${RESULT_VAR})
+    assign_value(${RESULT_VAR} PARENT_SCOPE)
+endforeach()
+
+# Determine the type of Threads
+if(CMAKE_USE_WIN32_THREADS_INIT)
+	set(HAVE_W32THREADS 1)
+else()
+	set(HAVE_W32THREADS 0)
+endif()
+if(CMAKE_USE_PTHREADS_INIT)
+	set(HAVE_PTHREADS 1)
+else()
+	set(HAVE_PTHREADS 0)
+endif()
+if(CMAKE_USE_OS2_THREADS_INIT)
+	set(HAVE_OS2THREADS 1)
+else()
+	set(HAVE_OS2THREADS 0)
+endif()
+
+if(HAVE_PTHREADS OR HAVE_OS2THREADS OR HAVE_W32THREADS)
+	set(HAVE_THREADS 1)
+else()
+	set(HAVE_THREADS 0)
+endif()
+
+# Toolchain features - Copilot suggested these test programs
+test_compiler_support("" "int main(void){__asm__(\".dn 0, 0\");\n;return 0;}" HAVE_AS_DN_DIRECTIVE)
+test_compiler_support("" "int main(void){__asm__(\".func myfunc\");\n;return 0;}" HAVE_AS_FUNC)
+test_compiler_support("" "int main(void){__asm__(\".object_arch armv8-a\");\nreturn 0;}" HAVE_AS_OBJECT_ARCH)
+test_compiler_support("" "int main(void){__asm__(\".mod.q\");\n;return 0;}" HAVE_ASM_MOD_Q)
+# To Do - finish out toolchain_features checks, followed by types_list, followed by have_list
 
 file(CONFIGURE
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/config.h"
@@ -164,7 +374,7 @@ file(CONFIGURE
 "/* Generated by cmake courtesy of kreinholz's hacks */
 #ifndef FFMPEG_CONFIG_H
 #define FFMPEG_CONFIG_H
-#define FFMPEG_CONFIGURATION \"this is just a placeholder for now--this is where configuration options are listed, although technically we don't need them and ffmpeg builds just fine in a pure cmake environment without them\"
+#define FFMPEG_CONFIGURATION \"this is where configuration options are normally listed, although technically we don't need them and ffmpeg builds just fine in a pure cmake environment without them\"
 #define FFMPEG_LICENSE \"GPL version 2 or later\"
 #define CONFIG_THIS_YEAR 2016
 #define FFMPEG_DATADIR ${CMAKE_CURRENT_BINARY_DIR}
@@ -215,13 +425,13 @@ file(CONFIGURE
 #define HAVE_POWER8 0
 #define HAVE_PPC4XX 0
 #define HAVE_VSX 0
-#define HAVE_AESNI 1
+#define HAVE_AESNI ${HAVE_AESNI}
 #define HAVE_AMD3DNOW ${HAVE_AMD3DNOW}
 #define HAVE_AMD3DNOWEXT ${HAVE_AMD3DNOWEXT}
 #define HAVE_AVX ${HAVE_AVX}
 #define HAVE_AVX2 ${HAVE_AVX2}
-#define HAVE_FMA3 1
-#define HAVE_FMA4 1
+#define HAVE_FMA3 ${HAVE_FMA3}
+#define HAVE_FMA4 ${HAVE_FMA4}
 #define HAVE_MMX ${HAVE_MMX}
 #define HAVE_MMXEXT ${HAVE_MMXEXT}
 #define HAVE_SSE ${HAVE_SSE}
@@ -229,269 +439,269 @@ file(CONFIGURE
 #define HAVE_SSE3 ${HAVE_SSE3}
 #define HAVE_SSE4 ${HAVE_SSE4}
 #define HAVE_SSE42 ${HAVE_SSE42}
-#define HAVE_SSSE3 1
-#define HAVE_XOP 1
-#define HAVE_CPUNOP 1
+#define HAVE_SSSE3 ${HAVE_SSSE3}
+#define HAVE_XOP ${HAVE_XOP}
+#define HAVE_CPUNOP ${HAVE_CPUNOP}
 #define HAVE_I686 ${ARCH_X86_64}
-#define HAVE_MIPSFPU 0
-#define HAVE_MIPS32R2 0
-#define HAVE_MIPS32R5 0
-#define HAVE_MIPS64R2 0
-#define HAVE_MIPS32R6 0
-#define HAVE_MIPS64R6 0
-#define HAVE_MIPSDSP 0
-#define HAVE_MIPSDSPR2 0
-#define HAVE_MSA 0
-#define HAVE_LOONGSON2 1
-#define HAVE_LOONGSON3 1
-#define HAVE_MMI 0
+#define HAVE_MIPSFPU ${HAVE_MIPSFPU}
+#define HAVE_MIPS32R2 ${HAVE_MIPS32R2}
+#define HAVE_MIPS32R5 ${HAVE_MIPS32R5}
+#define HAVE_MIPS64R2 ${HAVE_MIPS64R2}
+#define HAVE_MIPS32R6 ${HAVE_MIPS32R6}
+#define HAVE_MIPS64R6 ${HAVE_MIPS64R6}
+#define HAVE_MIPSDSP ${HAVE_MIPSDSP}
+#define HAVE_MIPSDSPR2 ${HAVE_MIPSDSPR2}
+#define HAVE_MSA ${HAVE_MSA}
+#define HAVE_LOONGSON2 ${HAVE_LOONGSON2}
+#define HAVE_LOONGSON3 ${HAVE_LOONGSON3}
+#define HAVE_MMI ${HAVE_MMI}
 #define HAVE_ARMV5TE_EXTERNAL 0
-#define HAVE_ARMV6_EXTERNAL 0
-#define HAVE_ARMV6T2_EXTERNAL 0
-#define HAVE_ARMV8_EXTERNAL 0
-#define HAVE_NEON_EXTERNAL 0
-#define HAVE_VFP_EXTERNAL 0
-#define HAVE_VFPV3_EXTERNAL 0
-#define HAVE_SETEND_EXTERNAL 0
+#define HAVE_ARMV6_EXTERNAL ${HAVE_ARMV6}
+#define HAVE_ARMV6T2_EXTERNAL ${HAVE_ARMV6T2}
+#define HAVE_ARMV8_EXTERNAL ${ARCH_AARCH64}
+#define HAVE_NEON_EXTERNAL ${HAVE_NEON}
+#define HAVE_VFP_EXTERNAL ${HAVE_VFP}
+#define HAVE_VFPV3_EXTERNAL ${HAVE_VFPV3}
+#define HAVE_SETEND_EXTERNAL ${HAVE_SETEND}
 #define HAVE_ALTIVEC_EXTERNAL 0
 #define HAVE_DCBZL_EXTERNAL 0
 #define HAVE_LDBRX_EXTERNAL 0
 #define HAVE_POWER8_EXTERNAL 0
 #define HAVE_PPC4XX_EXTERNAL 0
 #define HAVE_VSX_EXTERNAL 0
-#define HAVE_AESNI_EXTERNAL 1
-#define HAVE_AMD3DNOW_EXTERNAL 1
-#define HAVE_AMD3DNOWEXT_EXTERNAL 1
-#define HAVE_AVX_EXTERNAL 1
-#define HAVE_AVX2_EXTERNAL 1
-#define HAVE_FMA3_EXTERNAL 1
-#define HAVE_FMA4_EXTERNAL 1
-#define HAVE_MMX_EXTERNAL 1
-#define HAVE_MMXEXT_EXTERNAL 1
-#define HAVE_SSE_EXTERNAL 1
-#define HAVE_SSE2_EXTERNAL 1
-#define HAVE_SSE3_EXTERNAL 1
-#define HAVE_SSE4_EXTERNAL 1
-#define HAVE_SSE42_EXTERNAL 1
-#define HAVE_SSSE3_EXTERNAL 1
-#define HAVE_XOP_EXTERNAL 1
-#define HAVE_CPUNOP_EXTERNAL 0
-#define HAVE_I686_EXTERNAL 0
-#define HAVE_MIPSFPU_EXTERNAL 0
-#define HAVE_MIPS32R2_EXTERNAL 0
-#define HAVE_MIPS32R5_EXTERNAL 0
-#define HAVE_MIPS64R2_EXTERNAL 0
-#define HAVE_MIPS32R6_EXTERNAL 0
-#define HAVE_MIPS64R6_EXTERNAL 0
-#define HAVE_MIPSDSP_EXTERNAL 0
-#define HAVE_MIPSDSPR2_EXTERNAL 0
-#define HAVE_MSA_EXTERNAL 0
-#define HAVE_LOONGSON2_EXTERNAL 0
-#define HAVE_LOONGSON3_EXTERNAL 0
-#define HAVE_MMI_EXTERNAL 0
+#define HAVE_AESNI_EXTERNAL ${HAVE_AESNI}
+#define HAVE_AMD3DNOW_EXTERNAL ${HAVE_AMD3DNOW}
+#define HAVE_AMD3DNOWEXT_EXTERNAL ${HAVE_AMD3DNOWEXT}
+#define HAVE_AVX_EXTERNAL ${HAVE_AVX}
+#define HAVE_AVX2_EXTERNAL ${HAVE_AVX2}
+#define HAVE_FMA3_EXTERNAL ${HAVE_FMA3}
+#define HAVE_FMA4_EXTERNAL ${HAVE_FMA4}
+#define HAVE_MMX_EXTERNAL ${HAVE_MMX}
+#define HAVE_MMXEXT_EXTERNAL ${HAVE_MMXEXT}
+#define HAVE_SSE_EXTERNAL ${HAVE_SSE}
+#define HAVE_SSE2_EXTERNAL ${HAVE_SSE2}
+#define HAVE_SSE3_EXTERNAL ${HAVE_SSE3}
+#define HAVE_SSE4_EXTERNAL ${HAVE_SSE4}
+#define HAVE_SSE42_EXTERNAL ${HAVE_SSE42}
+#define HAVE_SSSE3_EXTERNAL ${HAVE_SSSE3}
+#define HAVE_XOP_EXTERNAL ${HAVE_XOP}
+#define HAVE_CPUNOP_EXTERNAL ${HAVE_CPUNOP}
+#define HAVE_I686_EXTERNAL ${ARCH_X86_64}
+#define HAVE_MIPSFPU_EXTERNAL ${HAVE_MIPSFPU}
+#define HAVE_MIPS32R2_EXTERNAL ${HAVE_MIPS32R2}
+#define HAVE_MIPS32R5_EXTERNAL ${HAVE_MIPS32R5}
+#define HAVE_MIPS64R2_EXTERNAL ${HAVE_MIPS64R2}
+#define HAVE_MIPS32R6_EXTERNAL ${HAVE_MIPS32R6}
+#define HAVE_MIPS64R6_EXTERNAL ${HAVE_MIPS64R6}
+#define HAVE_MIPSDSP_EXTERNAL ${HAVE_MIPSDSP}
+#define HAVE_MIPSDSPR2_EXTERNAL ${HAVE_MIPSDSPR2}
+#define HAVE_MSA_EXTERNAL ${HAVE_MSA}
+#define HAVE_LOONGSON2_EXTERNAL ${HAVE_LOONGSON2}
+#define HAVE_LOONGSON3_EXTERNAL ${HAVE_LOONGSON3}
+#define HAVE_MMI_EXTERNAL ${HAVE_MMI}
 #define HAVE_ARMV5TE_INLINE 0
-#define HAVE_ARMV6_INLINE 0
-#define HAVE_ARMV6T2_INLINE 0
-#define HAVE_ARMV8_INLINE 0
-#define HAVE_NEON_INLINE 0
-#define HAVE_VFP_INLINE 0
-#define HAVE_VFPV3_INLINE 0
-#define HAVE_SETEND_INLINE 0
+#define HAVE_ARMV6_INLINE ${HAVE_ARMV6}
+#define HAVE_ARMV6T2_INLINE ${HAVE_ARMV6T2}
+#define HAVE_ARMV8_INLINE ${ARCH_AARCH64}
+#define HAVE_NEON_INLINE ${HAVE_NEON}
+#define HAVE_VFP_INLINE ${HAVE_VFP}
+#define HAVE_VFPV3_INLINE ${HAVE_VFPV3}
+#define HAVE_SETEND_INLINE ${HAVE_SETEND}
 #define HAVE_ALTIVEC_INLINE 0
 #define HAVE_DCBZL_INLINE 0
 #define HAVE_LDBRX_INLINE 0
 #define HAVE_POWER8_INLINE 0
 #define HAVE_PPC4XX_INLINE 0
 #define HAVE_VSX_INLINE 0
-#define HAVE_AESNI_INLINE 1
-#define HAVE_AMD3DNOW_INLINE 1
-#define HAVE_AMD3DNOWEXT_INLINE 1
-#define HAVE_AVX_INLINE 1
-#define HAVE_AVX2_INLINE 1
-#define HAVE_FMA3_INLINE 1
-#define HAVE_FMA4_INLINE 1
-#define HAVE_MMX_INLINE 1
-#define HAVE_MMXEXT_INLINE 1
-#define HAVE_SSE_INLINE 1
-#define HAVE_SSE2_INLINE 1
-#define HAVE_SSE3_INLINE 1
-#define HAVE_SSE4_INLINE 1
-#define HAVE_SSE42_INLINE 1
-#define HAVE_SSSE3_INLINE 1
-#define HAVE_XOP_INLINE 1
-#define HAVE_CPUNOP_INLINE 0
-#define HAVE_I686_INLINE 0
-#define HAVE_MIPSFPU_INLINE 0
-#define HAVE_MIPS32R2_INLINE 0
-#define HAVE_MIPS32R5_INLINE 0
-#define HAVE_MIPS64R2_INLINE 0
-#define HAVE_MIPS32R6_INLINE 0
-#define HAVE_MIPS64R6_INLINE 0
-#define HAVE_MIPSDSP_INLINE 0
-#define HAVE_MIPSDSPR2_INLINE 0
-#define HAVE_MSA_INLINE 0
-#define HAVE_LOONGSON2_INLINE 0
-#define HAVE_LOONGSON3_INLINE 0
-#define HAVE_MMI_INLINE 0
-#define HAVE_ALIGNED_STACK 1
-#define HAVE_FAST_64BIT 1
+#define HAVE_AESNI_INLINE ${HAVE_AESNI}
+#define HAVE_AMD3DNOW_INLINE ${HAVE_AMD3DNOW}
+#define HAVE_AMD3DNOWEXT_INLINE ${HAVE_AMD3DNOWEXT}
+#define HAVE_AVX_INLINE ${HAVE_AVX}
+#define HAVE_AVX2_INLINE ${HAVE_AVX2}
+#define HAVE_FMA3_INLINE ${HAVE_FMA3}
+#define HAVE_FMA4_INLINE ${HAVE_FMA4}
+#define HAVE_MMX_INLINE ${HAVE_MMX}
+#define HAVE_MMXEXT_INLINE ${HAVE_MMXEXT}
+#define HAVE_SSE_INLINE ${HAVE_SSE}
+#define HAVE_SSE2_INLINE ${HAVE_SSE2}
+#define HAVE_SSE3_INLINE ${HAVE_SSE3}
+#define HAVE_SSE4_INLINE ${HAVE_SSE4}
+#define HAVE_SSE42_INLINE ${HAVE_SSE42}
+#define HAVE_SSSE3_INLINE ${HAVE_SSSE3}
+#define HAVE_XOP_INLINE ${HAVE_XOP}
+#define HAVE_CPUNOP_INLINE ${HAVE_CPUNOP}
+#define HAVE_I686_INLINE ${ARCH_X86_64}
+#define HAVE_MIPSFPU_INLINE ${HAVE_MIPSFPU}
+#define HAVE_MIPS32R2_INLINE ${HAVE_MIPS32R2}
+#define HAVE_MIPS32R5_INLINE ${HAVE_MIPS32R5}
+#define HAVE_MIPS64R2_INLINE ${HAVE_MIPS64R2}
+#define HAVE_MIPS32R6_INLINE ${HAVE_MIPS32R6}
+#define HAVE_MIPS64R6_INLINE ${HAVE_MIPS64R6}
+#define HAVE_MIPSDSP_INLINE ${HAVE_MIPSDSP}
+#define HAVE_MIPSDSPR2_INLINE ${HAVE_MIPSDSPR2}
+#define HAVE_MSA_INLINE ${HAVE_MSA}
+#define HAVE_LOONGSON2_INLINE ${HAVE_LOONGSON2}
+#define HAVE_LOONGSON3_INLINE ${HAVE_LOONGSON3}
+#define HAVE_MMI_INLINE ${HAVE_MMI}
+#define HAVE_ALIGNED_STACK ${ALIGNED_STACK}
+#define HAVE_FAST_64BIT 1 ${HAVE_FAST_64BIT}
 #define HAVE_FAST_CLZ 1
-#define HAVE_FAST_CMOV 1
-#define HAVE_LOCAL_ALIGNED_8 1
-#define HAVE_LOCAL_ALIGNED_16 1
-#define HAVE_LOCAL_ALIGNED_32 1
-#define HAVE_SIMD_ALIGN_16 1
-#define HAVE_ATOMICS_GCC 1
-#define HAVE_ATOMICS_SUNCC 0
-#define HAVE_ATOMICS_WIN32 0
-#define HAVE_ATOMIC_CAS_PTR 0
-#define HAVE_ATOMIC_COMPARE_EXCHANGE 1
-#define HAVE_MACHINE_RW_BARRIER 0
-#define HAVE_MEMORYBARRIER 0
-#define HAVE_MM_EMPTY 1
-#define HAVE_RDTSC 0
-#define HAVE_SARESTART 1
-#define HAVE_SYNC_VAL_COMPARE_AND_SWAP 1
-#define HAVE_CABS 1
-#define HAVE_CEXP 1
-#define HAVE_INLINE_ASM 1
-#define HAVE_SYMVER 1
-#define HAVE_YASM 1
+#define HAVE_FAST_CMOV ${HAVE_FAST_CMOV}
+#define HAVE_LOCAL_ALIGNED_8 ${HAVE_LOCAL_ALIGNED_8}
+#define HAVE_LOCAL_ALIGNED_16 ${HAVE_LOCAL_ALIGNED_16}
+#define HAVE_LOCAL_ALIGNED_32 ${HAVE_LOCAL_ALIGNED_32}
+#define HAVE_SIMD_ALIGN_16 ${HAVE_SIMD_ALIGN_16}
+#define HAVE_ATOMICS_GCC ${HAVE_ATOMICS_GCC}
+#define HAVE_ATOMICS_SUNCC ${HAVE_ATOMICS_SUNCC}
+#define HAVE_ATOMICS_WIN32 ${HAVE_ATOMICS_WIN32}
+#define HAVE_ATOMIC_CAS_PTR ${HAVE_ATOMIC_CAS_PTR}
+#define HAVE_ATOMIC_COMPARE_EXCHANGE ${HAVE_ATOMIC_COMPARE_EXCHANGE}
+#define HAVE_MACHINE_RW_BARRIER ${HAVE_MACHINE_RW_BARRIER}
+#define HAVE_MEMORYBARRIER ${HAVE_MEMORYBARRIER}
+#define HAVE_MM_EMPTY ${HAVE_MM_EMPTY}
+#define HAVE_RDTSC ${HAVE_RDTSC}
+#define HAVE_SARESTART ${HAVE_SARESTART}
+#define HAVE_SYNC_VAL_COMPARE_AND_SWAP ${HAVE_SYNC_VAL_COMPARE_AND_SWAP}
+#define HAVE_CABS ${HAVE_CABS}
+#define HAVE_CEXP ${HAVE_CEXP}
+#define HAVE_INLINE_ASM ${HAVE_INLINE_ASM}
+#define HAVE_SYMVER ${HAVE_SYMVER}
+#define HAVE_YASM ${HAVE_YASM}
 #define HAVE_BIGENDIAN 0
 #define HAVE_FAST_UNALIGNED ${FAST_UNALIGNED}
 #define HAVE_INCOMPATIBLE_LIBAV_ABI 0
-#define HAVE_ALSA_ASOUNDLIB_H 0
-#define HAVE_ALTIVEC_H 0
-#define HAVE_ARPA_INET_H 0
-#define HAVE_ASM_TYPES_H 0
-#define HAVE_CDIO_PARANOIA_H 0
-#define HAVE_CDIO_PARANOIA_PARANOIA_H 0
-#define HAVE_DEV_BKTR_IOCTL_BT848_H 0
-#define HAVE_DEV_BKTR_IOCTL_METEOR_H 0
-#define HAVE_DEV_IC_BT8XX_H 0
-#define HAVE_DEV_VIDEO_BKTR_IOCTL_BT848_H 0
-#define HAVE_DEV_VIDEO_METEOR_IOCTL_METEOR_H 0
-#define HAVE_DIRECT_H 0
-#define HAVE_DIRENT_H 1
-#define HAVE_DLFCN_H 1
-#define HAVE_D3D11_H 0
-#define HAVE_DXVA_H 0
-#define HAVE_ES2_GL_H 0
-#define HAVE_GSM_H 0
-#define HAVE_IO_H 0
-#define HAVE_MACH_MACH_TIME_H 0
-#define HAVE_MACHINE_IOCTL_BT848_H 0
-#define HAVE_MACHINE_IOCTL_METEOR_H 0
-#define HAVE_MALLOC_H 1
-#define HAVE_OPENCV2_CORE_CORE_C_H 0
-#define HAVE_OPENJPEG_2_1_OPENJPEG_H 0
-#define HAVE_OPENJPEG_2_0_OPENJPEG_H 0
-#define HAVE_OPENJPEG_1_5_OPENJPEG_H 0
-#define HAVE_OPENGL_GL3_H 0
-#define HAVE_POLL_H 1
-#define HAVE_SNDIO_H 1
-#define HAVE_SOUNDCARD_H 0
-#define HAVE_SYS_MMAN_H 1
-#define HAVE_SYS_PARAM_H 1
-#define HAVE_SYS_RESOURCE_H 1
-#define HAVE_SYS_SELECT_H 1
-#define HAVE_SYS_SOUNDCARD_H 1
-#define HAVE_SYS_TIME_H 1
-#define HAVE_SYS_UN_H 1
-#define HAVE_SYS_VIDEOIO_H 0
-#define HAVE_TERMIOS_H 1
-#define HAVE_UDPLITE_H 0
-#define HAVE_UNISTD_H 1
-#define HAVE_VALGRIND_VALGRIND_H 0
-#define HAVE_WINDOWS_H 0
-#define HAVE_WINSOCK2_H 0
-#define HAVE_INTRINSICS_NEON 0
-#define HAVE_ATANF 1
-#define HAVE_ATAN2F 1
-#define HAVE_CBRT 1
-#define HAVE_CBRTF 1
-#define HAVE_COPYSIGN 1
-#define HAVE_COSF 1
-#define HAVE_ERF 1
-#define HAVE_EXP2 1
-#define HAVE_EXP2F 1
-#define HAVE_EXPF 1
-#define HAVE_HYPOT 1
-#define HAVE_ISFINITE 1
-#define HAVE_ISINF 1
-#define HAVE_ISNAN 1
-#define HAVE_LDEXPF 1
-#define HAVE_LLRINT 1
-#define HAVE_LLRINTF 1
-#define HAVE_LOG2 1
-#define HAVE_LOG2F 1
-#define HAVE_LOG10F 1
-#define HAVE_LRINT 1
-#define HAVE_LRINTF 1
-#define HAVE_POWF 1
-#define HAVE_RINT 1
-#define HAVE_ROUND 1
-#define HAVE_ROUNDF 1
-#define HAVE_SINF 1
-#define HAVE_TRUNC 1
-#define HAVE_TRUNCF 1
-#define HAVE_ACCESS 1
-#define HAVE_ALIGNED_MALLOC 0
-#define HAVE_ARC4RANDOM 1
-#define HAVE_CLOCK_GETTIME 1
-#define HAVE_CLOSESOCKET 0
-#define HAVE_COMMANDLINETOARGVW 0
-#define HAVE_COTASKMEMFREE 0
-#define HAVE_CRYPTGENRANDOM 0
-#define HAVE_DLOPEN 1
-#define HAVE_FCNTL 1
-#define HAVE_FLT_LIM 1
-#define HAVE_FORK 1
-#define HAVE_GETADDRINFO 0
-#define HAVE_GETHRTIME 0
-#define HAVE_GETOPT 1
-#define HAVE_GETPROCESSAFFINITYMASK 0
-#define HAVE_GETPROCESSMEMORYINFO 0
-#define HAVE_GETPROCESSTIMES 0
-#define HAVE_GETRUSAGE 1
-#define HAVE_GETSYSTEMTIMEASFILETIME 0
-#define HAVE_GETTIMEOFDAY 1
-#define HAVE_GLOB 1
-#define HAVE_GLXGETPROCADDRESS 0
-#define HAVE_GMTIME_R 1
-#define HAVE_INET_ATON 0
-#define HAVE_ISATTY 1
-#define HAVE_JACK_PORT_GET_LATENCY_RANGE 0
-#define HAVE_KBHIT 0
-#define HAVE_LOCALTIME_R 1
-#define HAVE_LSTAT 1
-#define HAVE_LZO1X_999_COMPRESS 0
-#define HAVE_MACH_ABSOLUTE_TIME 0
-#define HAVE_MAPVIEWOFFILE 0
-#define HAVE_MEMALIGN 1
-#define HAVE_MKSTEMP 1
-#define HAVE_MMAP 1
-#define HAVE_MPROTECT 1
-#define HAVE_NANOSLEEP 1
-#define HAVE_PEEKNAMEDPIPE 0
-#define HAVE_POSIX_MEMALIGN 1
-#define HAVE_PTHREAD_CANCEL 1
-#define HAVE_SCHED_GETAFFINITY 1
-#define HAVE_SETCONSOLETEXTATTRIBUTE 0
-#define HAVE_SETCONSOLECTRLHANDLER 0
-#define HAVE_SETMODE 0
-#define HAVE_SETRLIMIT 1
-#define HAVE_SLEEP 0
-#define HAVE_STRERROR_R 1
-#define HAVE_SYSCONF 1
-#define HAVE_SYSCTL 1
-#define HAVE_USLEEP 1
-#define HAVE_UTGETOSTYPEFROMSTRING 0
-#define HAVE_VIRTUALALLOC 0
-#define HAVE_WGLGETPROCADDRESS 0
-#define HAVE_PTHREADS 1
-#define HAVE_OS2THREADS 0
-#define HAVE_W32THREADS 0
+#define HAVE_ALSA_ASOUNDLIB_H ${HAVE_ALSA_ASOUNDLIB_H}
+#define HAVE_ALTIVEC_H ${HAVE_ALTIVEC_H}
+#define HAVE_ARPA_INET_H ${HAVE_ARPA_INET_H}
+#define HAVE_ASM_TYPES_H ${HAVE_ASM_TYPES_H}
+#define HAVE_CDIO_PARANOIA_H ${HAVE_CDIO_PARANOIA_H}
+#define HAVE_CDIO_PARANOIA_PARANOIA_H ${HAVE_CDIO_PARANOIA_PARANOIA_H}
+#define HAVE_DEV_BKTR_IOCTL_BT848_H ${HAVE_DEV_BKTR_IOCTL_BT848_H}
+#define HAVE_DEV_BKTR_IOCTL_METEOR_H ${HAVE_DEV_BKTR_IOCTL_METEOR_H}
+#define HAVE_DEV_IC_BT8XX_H ${HAVE_DEV_IC_BT8XX_H}
+#define HAVE_DEV_VIDEO_BKTR_IOCTL_BT848_H ${HAVE_DEV_VIDEO_BKTR_IOCTL_BT848_H}
+#define HAVE_DEV_VIDEO_METEOR_IOCTL_METEOR_H ${HAVE_DEV_VIDEO_METEOR_IOCTL_METEOR_H}
+#define HAVE_DIRECT_H ${HAVE_DIRECT_H}
+#define HAVE_DIRENT_H ${HAVE_DIRENT_H}
+#define HAVE_DLFCN_H ${HAVE_DLFCN_H}
+#define HAVE_D3D11_H ${HAVE_D3D11_H}
+#define HAVE_DXVA_H ${HAVE_DXVA_H}
+#define HAVE_ES2_GL_H ${HAVE_ES2_GL_H}
+#define HAVE_GSM_H ${HAVE_GSM_H}
+#define HAVE_IO_H ${HAVE_IO_H}
+#define HAVE_MACH_MACH_TIME_H ${HAVE_MACH_MACH_TIME_H}
+#define HAVE_MACHINE_IOCTL_BT848_H ${HAVE_MACHINE_IOCTL_BT848_H}
+#define HAVE_MACHINE_IOCTL_METEOR_H ${HAVE_MACHINE_IOCTL_METEOR_H}
+#define HAVE_MALLOC_H ${HAVE_MALLOC_H}
+#define HAVE_OPENCV2_CORE_CORE_C_H ${HAVE_OPENCV2_CORE_CORE_C_H}
+#define HAVE_OPENJPEG_2_1_OPENJPEG_H ${HAVE_OPENJPEG_2_1_OPENJPEG_H}
+#define HAVE_OPENJPEG_2_0_OPENJPEG_H ${HAVE_OPENJPEG_2_0_OPENJPEG_H}
+#define HAVE_OPENJPEG_1_5_OPENJPEG_H ${HAVE_OPENJPEG_1_5_OPENJPE}
+#define HAVE_OPENGL_GL3_H ${HAVE_OPENGL_GL3_H}
+#define HAVE_POLL_H ${HAVE_POLL_H}
+#define HAVE_SNDIO_H ${HAVE_SNDIO_H}
+#define HAVE_SOUNDCARD_H ${HAVE_SOUNDCARD_H}
+#define HAVE_SYS_MMAN_H ${HAVE_SYS_MMAN_H}
+#define HAVE_SYS_PARAM_H ${HAVE_SYS_PARAM_H}
+#define HAVE_SYS_RESOURCE_H ${HAVE_SYS_RESOURCE_H}
+#define HAVE_SYS_SELECT_H ${HAVE_SYS_SELECT_H}
+#define HAVE_SYS_SOUNDCARD_H ${HAVE_SYS_SOUNDCARD_H}
+#define HAVE_SYS_TIME_H ${HAVE_SYS_TIME_H}
+#define HAVE_SYS_UN_H ${HAVE_SYS_UN_H}
+#define HAVE_SYS_VIDEOIO_H ${HAVE_SYS_VIDEOIO_H}
+#define HAVE_TERMIOS_H ${HAVE_TERMIOS_H}
+#define HAVE_UDPLITE_H ${HAVE_UDPLITE_H}
+#define HAVE_UNISTD_H ${HAVE_UNISTD_H}
+#define HAVE_VALGRIND_VALGRIND_H ${HAVE_VALGRIND_VALGRIND_H}
+#define HAVE_WINDOWS_H ${HAVE_WINDOWS_H}
+#define HAVE_WINSOCK2_H ${HAVE_WINSOCK2_H}
+#define HAVE_INTRINSICS_NEON ${HAVE_NEON}
+#define HAVE_ATANF ${HAVE_ATANF}
+#define HAVE_ATAN2F ${HAVE_ATAN2F}
+#define HAVE_CBRT ${HAVE_CBRT}
+#define HAVE_CBRTF ${HAVE_CBRTF}
+#define HAVE_COPYSIGN ${HAVE_COPYSIGN}
+#define HAVE_COSF ${HAVE_COSF}
+#define HAVE_ERF ${HAVE_ERF}
+#define HAVE_EXP2 ${HAVE_EXP2}
+#define HAVE_EXP2F ${HAVE_EXP2F}
+#define HAVE_EXPF ${HAVE_EXPF}
+#define HAVE_HYPOT ${HAVE_HYPOT}
+#define HAVE_ISFINITE ${HAVE_ISFINITE}
+#define HAVE_ISINF ${HAVE_ISINF}
+#define HAVE_ISNAN ${HAVE_ISNAN}
+#define HAVE_LDEXPF ${HAVE_LDEXPF}
+#define HAVE_LLRINT ${HAVE_LLRINT}
+#define HAVE_LLRINTF ${HAVE_LLRINTF}
+#define HAVE_LOG2 ${HAVE_LOG2}
+#define HAVE_LOG2F ${HAVE_LOG2F}
+#define HAVE_LOG10F ${HAVE_LOG10F}
+#define HAVE_LRINT ${HAVE_LRINT}
+#define HAVE_LRINTF ${HAVE_LRINTF}
+#define HAVE_POWF ${HAVE_POWF}
+#define HAVE_RINT ${HAVE_RINT}
+#define HAVE_ROUND ${HAVE_ROUND}
+#define HAVE_ROUNDF ${HAVE_ROUNDF}
+#define HAVE_SINF ${HAVE_SINF}
+#define HAVE_TRUNC ${HAVE_TRUNC}
+#define HAVE_TRUNCF ${HAVE_TRUNCF}
+#define HAVE_ACCESS ${HAVE_ACCESS}
+#define HAVE_ALIGNED_MALLOC ${HAVE_ALIGNED_MALLOC}
+#define HAVE_ARC4RANDOM ${HAVE_ARC4RANDOM}
+#define HAVE_CLOCK_GETTIME ${HAVE_CLOCK_GETTIME}
+#define HAVE_CLOSESOCKET ${HAVE_CLOSESOCKET}
+#define HAVE_COMMANDLINETOARGVW ${HAVE_COMMANDLINETOARGVW}
+#define HAVE_COTASKMEMFREE ${HAVE_COTASKMEMFREE}
+#define HAVE_CRYPTGENRANDOM ${HAVE_CRYPTGENRANDOM}
+#define HAVE_DLOPEN ${HAVE_DLOPEN}
+#define HAVE_FCNTL ${HAVE_FCNTL}
+#define HAVE_FLT_LIM ${HAVE_FLT_LIM}
+#define HAVE_FORK ${HAVE_FORK}
+#define HAVE_GETADDRINFO ${HAVE_GETADDRINFO}
+#define HAVE_GETHRTIME ${HAVE_GETHRTIME}
+#define HAVE_GETOPT ${HAVE_GETOPT}
+#define HAVE_GETPROCESSAFFINITYMASK ${HAVE_GETPROCESSAFFINITYMASK}
+#define HAVE_GETPROCESSMEMORYINFO ${HAVE_GETPROCESSMEMORYINFO}
+#define HAVE_GETPROCESSTIMES ${HAVE_GETPROCESSTIMES}
+#define HAVE_GETRUSAGE ${HAVE_GETRUSAGE}
+#define HAVE_GETSYSTEMTIMEASFILETIME ${HAVE_GETSYSTEMTIMEASFILETIME}
+#define HAVE_GETTIMEOFDAY ${HAVE_GETTIMEOFDAY}
+#define HAVE_GLOB ${HAVE_GLOB}
+#define HAVE_GLXGETPROCADDRESS ${HAVE_GLXGETPROCADDRESS}
+#define HAVE_GMTIME_R ${HAVE_GMTIME_R}
+#define HAVE_INET_ATON ${HAVE_INET_ATON}
+#define HAVE_ISATTY ${HAVE_ISATTY}
+#define HAVE_JACK_PORT_GET_LATENCY_RANGE ${HAVE_JACK_PORT_GET_LATENCY_RANGE}
+#define HAVE_KBHIT ${HAVE_KBHIT}
+#define HAVE_LOCALTIME_R ${HAVE_LOCALTIME_R}
+#define HAVE_LSTAT ${HAVE_LSTAT}
+#define HAVE_LZO1X_999_COMPRESS ${HAVE_LZO1X_999_COMPRESS}
+#define HAVE_MACH_ABSOLUTE_TIME ${HAVE_MACH_ABSOLUTE_TIME}
+#define HAVE_MAPVIEWOFFILE ${HAVE_MAPVIEWOFFILE}
+#define HAVE_MEMALIGN ${HAVE_MEMALIGN}
+#define HAVE_MKSTEMP ${HAVE_MKSTEMP}
+#define HAVE_MMAP ${HAVE_MMAP}
+#define HAVE_MPROTECT ${HAVE_MPROTECT}
+#define HAVE_NANOSLEEP ${HAVE_NANOSLEEP}
+#define HAVE_PEEKNAMEDPIPE ${HAVE_PEEKNAMEDPIPE}
+#define HAVE_POSIX_MEMALIGN ${HAVE_POSIX_MEMALIGN}
+#define HAVE_PTHREAD_CANCEL ${HAVE_PTHREAD_CANCEL}
+#define HAVE_SCHED_GETAFFINITY ${HAVE_SCHED_GETAFFINITY}
+#define HAVE_SETCONSOLETEXTATTRIBUTE ${HAVE_SETCONSOLETEXTATTRIBUTE}
+#define HAVE_SETCONSOLECTRLHANDLER ${HAVE_SETCONSOLECTRLHANDLER}
+#define HAVE_SETMODE ${HAVE_SETMODE}
+#define HAVE_SETRLIMIT ${HAVE_SETRLIMIT}
+#define HAVE_SLEEP ${HAVE_SLEEP}
+#define HAVE_STRERROR_R ${HAVE_STRERROR_R}
+#define HAVE_SYSCONF ${HAVE_SYSCONF}
+#define HAVE_SYSCTL ${HAVE_SYSCTL}
+#define HAVE_USLEEP ${HAVE_USLEEP}
+#define HAVE_UTGETOSTYPEFROMSTRING ${HAVE_UTGETOSTYPEFROMSTRING}
+#define HAVE_VIRTUALALLOC ${HAVE_VIRTUALALLOC}
+#define HAVE_WGLGETPROCADDRESS ${HAVE_WGLGETPROCADDRESS}
+#define HAVE_PTHREADS ${HAVE_PTHREADS}
+#define HAVE_OS2THREADS ${HAVE_OS2THREADS}
+#define HAVE_W32THREADS ${HAVE_W32THREADS}
 #define HAVE_AS_DN_DIRECTIVE 0
 #define HAVE_AS_FUNC 0
 #define HAVE_AS_OBJECT_ARCH 0
@@ -541,12 +751,12 @@ file(CONFIGURE
 #define HAVE_SDL 0
 #define HAVE_SECTION_DATA_REL_RO 0
 #define HAVE_TEXI2HTML 0
-#define HAVE_THREADS 1
+#define HAVE_THREADS ${HAVE_THREADS}
 #define HAVE_VAAPI_X11 0
 #define HAVE_VDPAU_X11 0
 #define HAVE_WINRT 0
 #define HAVE_XLIB 1
-#define CONFIG_BSFS 0
+#define CONFIG_BSFS 0	###################### We can stop once we get to here ##########################
 #define CONFIG_DECODERS 1
 #define CONFIG_ENCODERS 1
 #define CONFIG_HWACCELS 0
@@ -559,8 +769,8 @@ file(CONFIGURE
 #define CONFIG_PROTOCOLS 1
 #define CONFIG_DOC 0
 #define CONFIG_HTMLPAGES 0
-#define CONFIG_MANPAGES 1
-#define CONFIG_PODPAGES 1
+#define CONFIG_MANPAGES 0
+#define CONFIG_PODPAGES 0
 #define CONFIG_TXTPAGES 0
 #define CONFIG_AVIO_READING_EXAMPLE 1
 #define CONFIG_AVIO_DIR_CMD_EXAMPLE 1
@@ -714,7 +924,7 @@ file(CONFIGURE
 #define CONFIG_MEMORY_POISONING 0
 #define CONFIG_NEON_CLOBBER_TEST 0
 #define CONFIG_PIC 1
-#define CONFIG_POD2MAN 1
+#define CONFIG_POD2MAN 0
 #define CONFIG_RAISE_MAJOR 0
 #define CONFIG_THUMB 0
 #define CONFIG_VALGRIND_BACKTRACE 0

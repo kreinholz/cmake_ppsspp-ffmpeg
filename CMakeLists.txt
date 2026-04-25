@@ -1,6 +1,9 @@
 cmake_minimum_required (VERSION 3.10.0)
 project (ffmpeg)
 
+# Threads are required
+find_package(Threads REQUIRED)
+
 # To Do - create a variable to store COMPILER_Flags which we can then conditionally change based on the build target
 
 # Assign appropriate Assembler settings based on architecture and target
