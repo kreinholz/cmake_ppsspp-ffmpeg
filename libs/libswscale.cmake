@@ -36,6 +36,6 @@ if (ENABLE_OPTIMIZATIONS)	# NOTE: these .c files contain inline ASM; make sure c
 endif()
 
 # OS-specific sources
-if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows" OR GNU_WINDRES OR MSVC)
 	list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/swscaleres.rc)
 endif()

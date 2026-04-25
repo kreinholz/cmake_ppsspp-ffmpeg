@@ -1,8 +1,17 @@
 cmake_minimum_required (VERSION 3.10.0)
 project (ffmpeg)
 
+include(FindPkgConfig)
+
 # Threads are required
 find_package(Threads REQUIRED)
+
+# GNU windres isn't required, but used to compile Windows .rc files with MinGW. MSVC can also compile them
+find_package(GNU_WINDRES QUIET)
+find_package(ZLIB)
+pkg_check_modules(VAAPI_X11 libva-x11)
+pkg_check_modules(VDPAU_X11 vdpau)
+find_package(X11 QUIET)
 
 # To Do - create a variable to store COMPILER_Flags which we can then conditionally change based on the build target
 

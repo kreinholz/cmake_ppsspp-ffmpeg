@@ -311,24 +311,20 @@ endif()
 
 include(CheckIncludeFile)
 # Check for presence of various headers on system--list taken from ffmpeg's configure
-function(check_listed_includes)
-	foreach(header alsa_asoundlib_h altivec_h arpa_inet_h asm_types_h cdio_paranoia_h cdio_paranoia_paranoia_h dev_bktr_ioctl_bt848_h dev_bktr_ioctl_meteor_h dev_ic_bt8xx_h dev_video_bktr_ioctl_bt848_h dev_video_meteor_ioctl_meteor_h direct_h dirent_h dlfcn_h d3d11_h dxva_h ES2_gl_h gsm_h io_h mach_mach_time_h machine_ioctl_bt848_h machine_ioctl_meteor_h malloc_h opencv2_core_core_c_h openjpeg_2_1_openjpeg_h openjpeg_2_0_openjpeg_h openjpeg_1_5_openjpeg_h OpenGL_gl3_h poll_h sndio_h soundcard_h sys_mman_h sys_param_h sys_resource_h sys_select_h sys_soundcard_h sys_time_h sys_un_h sys_videoio_h termios_h udplite_h unistd_h valgrind_valgrind_h windows_h winsock2_h)
-		# convert header item to proper header format
-		string(REGEX REPLACE "_h" ".h" header_formatted ${header})
-    	# Create a RESULT_VAR, properly formatted
-    	string(TOUPPER "${header}" uppercase_header)
-    	set(RESULT_VAR "HAVE_${uppercase_header}")
-    	# Look for the header
-    	check_include_file(${header_formatted} ${RESULT_VAR})
-    	assign_value(${RESULT_VAR} PARENT_SCOPE)
-	endforeach()
-endfunction()
-check_listed_includes()
+foreach(header alsa_asoundlib_h altivec_h arpa_inet_h asm_types_h cdio_paranoia_h cdio_paranoia_paranoia_h dev_bktr_ioctl_bt848_h dev_bktr_ioctl_meteor_h dev_ic_bt8xx_h dev_video_bktr_ioctl_bt848_h dev_video_meteor_ioctl_meteor_h direct_h dirent_h dlfcn_h d3d11_h dxva_h ES2_gl_h gsm_h io_h mach_mach_time_h machine_ioctl_bt848_h machine_ioctl_meteor_h malloc_h opencv2_core_core_c_h openjpeg_2_1_openjpeg_h openjpeg_2_0_openjpeg_h openjpeg_1_5_openjpeg_h OpenGL_gl3_h poll_h sndio_h soundcard_h sys_mman_h sys_param_h sys_resource_h sys_select_h sys_soundcard_h sys_time_h sys_un_h sys_videoio_h termios_h udplite_h unistd_h valgrind_valgrind_h windows_h winsock2_h)
+	# convert header item to proper header format
+	string(REGEX REPLACE "_h" ".h" header_formatted ${header})
+    # Create a RESULT_VAR, properly formatted
+    string(TOUPPER "${header}" uppercase_header)
+    set(RESULT_VAR "HAVE_${uppercase_header}")
+    # Look for the header
+    check_include_file(${header_formatted} ${RESULT_VAR})
+    assign_value(${RESULT_VAR} PARENT_SCOPE) # Fix this: works fine if 'true', does nothing if 'false'
+endforeach()
 
 # Math symbols can't be reliably tested with check_symbol_exists, so we have to use check_function_exists instead
 # Combined ffmpeg's configure math_func and system_funcs lists here since the check is the same
-# Note: I removed gmtime_r & localtime_r from this list as it was already tested for above
-set(CMAKE_REQUIRED_LIBRARIES m)
+# Note: I removed gmtime_r & localtime_r from this list as they were already tested for above
 foreach(math_func atanf atan2f cbrt cbrtf copysign cosf erf exp2 exp2f expf hypot isfinite isinf isnan ldexpf llrint llrintf log2 log2f log10f lrint lrintf powf rint round roundf sinf trunc truncf access aligned_malloc arc4random clock_gettime closesocket CommandLineToArgvW CoTaskMemFree CryptGenRandom dlopen fcntl flt_lim fork getaddrinfo gethrtime getopt GetProcessAffinityMask GetProcessMemoryInfo GetProcessTimes getrusage GetSystemTimeAsFileTime gettimeofday glob glXGetProcAddress inet_aton isatty jack_port_get_latency_range kbhit lstat lzo1x_999_compress mach_absolute_time MapViewOfFile memalign mkstemp mmap mprotect nanosleep PeekNamedPipe posix_memalign pthread_cancel sched_getaffinity SetConsoleTextAttribute SetConsoleCtrlHandler setmode setrlimit Sleep strerror_r sysconf sysctl usleep UTGetOSTypeFromString VirtualAlloc wglGetProcAddress)
     # Create a RESULT_VAR, properly formatted
     string(TOUPPER "${math_func}" uppercase_math_func)
@@ -366,7 +362,144 @@ test_compiler_support("" "int main(void){__asm__(\".dn 0, 0\");\n;return 0;}" HA
 test_compiler_support("" "int main(void){__asm__(\".func myfunc\");\n;return 0;}" HAVE_AS_FUNC)
 test_compiler_support("" "int main(void){__asm__(\".object_arch armv8-a\");\nreturn 0;}" HAVE_AS_OBJECT_ARCH)
 test_compiler_support("" "int main(void){__asm__(\".mod.q\");\n;return 0;}" HAVE_ASM_MOD_Q)
-# To Do - finish out toolchain_features checks, followed by types_list, followed by have_list
+test_compiler_support("" "struct __attribute__((may_alias)) A { int x; };\nint main() { struct A a; a.x = 1;\nreturn 0;}" HAVE_ATTRIBUTE_MAY_ALIAS)
+test_compiler_support("" "struct __attribute__((packed)) B { char c; int i; };\nint main() { struct B b; b.c = 0; b.i = 1; return 0; }" HAVE_ATTRIBUTE_PACKED)
+test_compiler_support("" "int main() {\nregister int r __asm__(\"ebp\");\nr = 0;\nreturn r; }" HAVE_EBP_AVAILABLE)
+test_compiler_support("" "int main() {\nregister int r __asm__(\"ebx\");\nr = 0;\nreturn r; }" HAVE_EBX_AVAILABLE)
+test_compiler_support("" "__asm__(\".section .text\");\nint main() { return 0; }" HAVE_GNU_AS)
+test_compiler_support("" "__asm__(\".using mydata,12\");\nint main() { return 0; }" HAVE_IBM_ASM)
+test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\".globl mylabel\\nmylabel:\");\nreturn 0;}" HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS)
+test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\"jmp 1f\\n1:\\n\");\nreturn 0;}" HAVE_INLINE_ASM_LABELS)
+test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\"jmp global_label\\n.global global_label\\nglobal_label:\");\nreturn 0;}" HAVE_INLINE_ASM_NONLOCAL_LABELS)
+test_compiler_support("" "#include <stdio.h>\nint main(void){#pragma deprecated\nint x = 0;\nreturn 0;}" HAVE_PRAGMA_DEPRECATED)
+test_compiler_support("" "#include <stdio.h>\nint main(void){#ifndef RSYNC_CONTIMEOUT\n#define RSYNC_CONTIMEOUT 30\n#endif\nreturn 0;}" HAVE_RSYNC_CONTIMEOUT)
+test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\".symver myfunc,myfunc@VER_1.0\"); void myfunc(void) {}\nreturn 0;}" HAVE_SYMVER_ASM_LABEL)
+test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\".symver myfunc,myfunc@@VER_1.0\"); void myfunc(void) {}\nreturn 0;}" HAVE_SYMVER_GNU_ASM)
+test_compiler_support("" "#include <stdio.h>\nint main(void){__attribute__((pcs(\"aapcs-vfp\"))) void foo(void) {}\nreturn 0;}" HAVE_VFP_ARGS)
+test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\"add %0, %1, %2\" : \"=r\"( (int){0} ) : \"r\"(1), \"r\"(2));\nreturn 0;}" HAVE_XFORM_ASM)
+test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\"pxor %xmm0, %xmm0\" ::: \"xmm0\");\nreturn 0;}" HAVE_XMM_CLOBBERS)
+assign_value(HAVE_AS_DN_DIRECTIVE)
+assign_value(HAVE_AS_FUNC)
+assign_value(HAVE_AS_OBJECT_ARCH)
+assign_value(HAVE_ASM_MOD_Q)
+assign_value(HAVE_ATTRIBUTE_MAY_ALIAS)
+assign_value(HAVE_ATTRIBUTE_PACKED)
+assign_value(HAVE_EBP_AVAILABLE)
+assign_value(HAVE_EBX_AVAILABLE)
+assign_value(HAVE_GNU_AS)
+assign_value(HAVE_IBM_ASM)
+assign_value(HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS)
+assign_value(HAVE_INLINE_ASM_LABELS)
+assign_value(HAVE_INLINE_ASM_NONLOCAL_LABELS)
+assign_value(HAVE_PRAGMA_DEPRECATED)
+assign_value(HAVE_RSYNC_CONTIMEOUT)
+assign_value(HAVE_SYMVER_ASM_LABEL)
+assign_value(HAVE_SYMVER_GNU_ASM)
+assign_value(HAVE_VFP_ARGS)
+assign_value(HAVE_XFORM_ASM)
+assign_value(HAVE_XMM_CLOBBERS)
+
+# Types
+include(CheckTypeSize)
+include(CheckStructHasMember)
+check_type_size("CONDITION_VARIABLE_Ptr" HAVE_CONDITION_VARIABLE_PTR)
+check_type_size("socklen_t" HAVE_SOCKLEN_T)
+check_type_size("struct addrinfo" HAVE_STRUCT_ADDRINFO)
+check_type_size("struct group_source_req" HAVE_STRUCT_GROUP_SOURCE_REQ)
+check_type_size("struct ip_mreq_source" HAVE_STRUCT_IP_MREQ_SOURCE)
+check_type_size("struct ipv6_mreq" HAVE_STRUCT_IPV6_MREQ)
+check_type_size("struct pollfd" HAVE_STRUCT_POLLFD)
+check_type_size("struct sctp_event_subscribe" HAVE_STRUCT_SCTP_EVENT_SUBSCRIBE)
+check_type_size("struct sockaddr_in6" HAVE_STRUCT_SOCKADDR_IN6)
+check_type_size("struct sockaddr_storage" HAVE_STRUCT_SOCKADDR_STORAGE)
+check_type_size("struct v4l2_frmivalenum" HAVE_STRUCT_V4L2_FRMIVALENUM)
+check_struct_has_member("struct rusage" ru_maxrss "sys/resource.h" HAVE_STRUCT_RUSAGE_RU_MAXRSS)
+check_struct_has_member("struct sockaddr" sa_len "sys/socket.h" HAVE_STRUCT_SOCKADDR_SA_LEN)
+check_struct_has_member("struct stat" st_mtim.tv_nsec "sys/stat.h" HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC)
+check_struct_has_member("struct v4l2_frmivalenum" discrete "linux/videodev2.h" HAVE_STRUCT_V4L2_FRMIVALENUM_DISCRETE)
+assign_value(HAVE_CONDITION_VARIABLE_PTR)
+assign_value(HAVE_SOCKLEN_T)
+assign_value(HAVE_STRUCT_ADDRINFO)
+assign_value(HAVE_STRUCT_GROUP_SOURCE_REQ)
+assign_value(HAVE_STRUCT_IP_MREQ_SOURCE)
+assign_value(HAVE_STRUCT_IPV6_MREQ)
+assign_value(HAVE_STRUCT_POLLFD)
+assign_value(HAVE_STRUCT_SCTP_EVENT_SUBSCRIBE)
+assign_value(HAVE_STRUCT_SOCKADDR_IN6)
+assign_value(HAVE_STRUCT_SOCKADDR_STORAGE)
+assign_value(HAVE_STRUCT_V4L2_FRMIVALENUM)
+assign_value(HAVE_STRUCT_RUSAGE_RU_MAXRSS)
+assign_value(HAVE_STRUCT_SOCKADDR_SA_LEN)
+assign_value(HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC)
+assign_value(HAVE_STRUCT_V4L2_FRMIVALENUM_DISCRETE)
+
+# Deal with if(GNU_WINDRES) setting HAVE_GNU_WINDRES to "1")
+if(GNU_WINDRES)
+	set(HAVE_GNU_WINDRES 1)
+else()
+	set(HAVE_GNU_WINDRES 0)
+endif()
+
+if(WIN32)
+	set(HAVE_DOS_PATHS 1)
+	check_library_exists(dxva2 DXVA2CreateVideoService "" HAVE_DXVA2_LIB)
+	check_include_file(dxva2api.h HAVE_DXVA2API_COBJ)
+else()
+	set(HAVE_DOS_PATHS 0)
+endif()
+
+if(MSVC)
+	set(HAVE_LIBC_MSVCRT 1)
+else()
+	set(HAVE_LIBC_MSVCRT 0)
+endif()
+
+# We don't need a FireWire camera library, GNU Texinfo tools, perl/pod2man, or SDL, so we'll hardcode all to "0"
+
+test_compiler_support("" "__attribute__((section(\".data.rel.ro\"))) const int x = 42;\nint main() { return x; }" HAVE_SECTION_DATA_REL_RO)
+
+if(WIN32 AND CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
+    set(HAVE_WINRT 1)
+else()
+    set(HAVE_WINRT 0)
+endif()
+
+if(VAAPI_X11_FOUND) # Fix these 2: PkgConfig doesn't give me the variable I want so this returns false even when true
+	set(HAVE_VAAPI_X11 1)
+else()
+	set(HAVE_VAAPI_X11 0)
+endif()
+if(VDPAU_X11_FOUND)
+	set(HAVE_VDPAU_X11 1)
+else()
+	set(HAVE_VDPAU_X11 0)
+endif()
+if(X11)
+	set(HAVE_XLIB 1)
+else()
+	set(HAVE_XLIB 0)
+endif()
+
+assign_value(HAVE_DXVA2_LIB)
+assign_value(HAVE_DXVA2API_COBJ)
+assign_value(HAVE_SECTION_DATA_REL_RO)
+
+if(HAVE_DXVA2_LIB OR HAVE_VAAPI_X11 OR HAVE_VDPAU_X11)
+	set(CONFIG_HWACCELS 1)
+else()
+	set(CONFIG_HWACCELS 0)
+endif()
+
+if(ZLIB)
+	set(HAVE_ZLIB 1)
+else()
+	set(HAVE_ZLIB 0)
+endif()
+if(X11)
+	set(HAVE_XLIB 1)
+else()
+	set(HAVE_XLIB 0)
+endif()
 
 file(CONFIGURE
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/config.h"
@@ -702,64 +835,64 @@ file(CONFIGURE
 #define HAVE_PTHREADS ${HAVE_PTHREADS}
 #define HAVE_OS2THREADS ${HAVE_OS2THREADS}
 #define HAVE_W32THREADS ${HAVE_W32THREADS}
-#define HAVE_AS_DN_DIRECTIVE 0
-#define HAVE_AS_FUNC 0
-#define HAVE_AS_OBJECT_ARCH 0
-#define HAVE_ASM_MOD_Q 0
-#define HAVE_ATTRIBUTE_MAY_ALIAS 1
-#define HAVE_ATTRIBUTE_PACKED 1
-#define HAVE_EBP_AVAILABLE 1
-#define HAVE_EBX_AVAILABLE 1
-#define HAVE_GNU_AS 0
-#define HAVE_GNU_WINDRES 0
-#define HAVE_IBM_ASM 0
-#define HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS 0
-#define HAVE_INLINE_ASM_LABELS 1
-#define HAVE_INLINE_ASM_NONLOCAL_LABELS 1
-#define HAVE_PRAGMA_DEPRECATED 1
-#define HAVE_RSYNC_CONTIMEOUT 0
-#define HAVE_SYMVER_ASM_LABEL 1
-#define HAVE_SYMVER_GNU_ASM 1
-#define HAVE_VFP_ARGS 0
-#define HAVE_XFORM_ASM 0
-#define HAVE_XMM_CLOBBERS 1
-#define HAVE_CONDITION_VARIABLE_PTR 0
-#define HAVE_SOCKLEN_T 0
-#define HAVE_STRUCT_ADDRINFO 0
-#define HAVE_STRUCT_GROUP_SOURCE_REQ 0
-#define HAVE_STRUCT_IP_MREQ_SOURCE 0
-#define HAVE_STRUCT_IPV6_MREQ 0
-#define HAVE_STRUCT_POLLFD 0
-#define HAVE_STRUCT_RUSAGE_RU_MAXRSS 1
-#define HAVE_STRUCT_SCTP_EVENT_SUBSCRIBE 0
-#define HAVE_STRUCT_SOCKADDR_IN6 0
-#define HAVE_STRUCT_SOCKADDR_SA_LEN 0
-#define HAVE_STRUCT_SOCKADDR_STORAGE 0
-#define HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC 1
-#define HAVE_STRUCT_V4L2_FRMIVALENUM_DISCRETE 0
-#define HAVE_ATOMICS_NATIVE 1
-#define HAVE_DOS_PATHS 0
-#define HAVE_DXVA2_LIB 0
-#define HAVE_DXVA2API_COBJ 0
-#define HAVE_LIBC_MSVCRT 0
+#define HAVE_AS_DN_DIRECTIVE ${HAVE_AS_DN_DIRECTIVE}
+#define HAVE_AS_FUNC ${HAVE_AS_FUNC}
+#define HAVE_AS_OBJECT_ARCH ${HAVE_AS_OBJECT_ARCH}
+#define HAVE_ASM_MOD_Q ${HAVE_ASM_MOD_Q}
+#define HAVE_ATTRIBUTE_MAY_ALIAS ${HAVE_ATTRIBUTE_MAY_ALIAS}
+#define HAVE_ATTRIBUTE_PACKED ${HAVE_ATTRIBUTE_PACKED}
+#define HAVE_EBP_AVAILABLE ${HAVE_EBP_AVAILABLE}
+#define HAVE_EBX_AVAILABLE ${HAVE_EBX_AVAILABLE}
+#define HAVE_GNU_AS ${HAVE_GNU_AS}
+#define HAVE_GNU_WINDRES ${HAVE_GNU_WINDRES}
+#define HAVE_IBM_ASM ${HAVE_IBM_ASM}
+#define HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS ${HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS}
+#define HAVE_INLINE_ASM_LABELS ${HAVE_INLINE_ASM_LABELS}
+#define HAVE_INLINE_ASM_NONLOCAL_LABELS ${HAVE_INLINE_ASM_NONLOCAL_LABELS}
+#define HAVE_PRAGMA_DEPRECATED ${HAVE_PRAGMA_DEPRECATED}
+#define HAVE_RSYNC_CONTIMEOUT ${HAVE_RSYNC_CONTIMEOUT}
+#define HAVE_SYMVER_ASM_LABEL ${HAVE_SYMVER_ASM_LABEL}
+#define HAVE_SYMVER_GNU_ASM ${HAVE_SYMVER_GNU_ASM}
+#define HAVE_VFP_ARGS ${HAVE_VFP_ARGS}
+#define HAVE_XFORM_ASM ${HAVE_XFORM_ASM}
+#define HAVE_XMM_CLOBBERS ${HAVE_XMM_CLOBBERS}
+#define HAVE_CONDITION_VARIABLE_PTR ${HAVE_CONDITION_VARIABLE_PTR}
+#define HAVE_SOCKLEN_T ${HAVE_SOCKLEN_T}
+#define HAVE_STRUCT_ADDRINFO ${HAVE_STRUCT_ADDRINFO}
+#define HAVE_STRUCT_GROUP_SOURCE_REQ ${HAVE_STRUCT_GROUP_SOURCE_REQ}
+#define HAVE_STRUCT_IP_MREQ_SOURCE ${HAVE_STRUCT_IP_MREQ_SOURCE}
+#define HAVE_STRUCT_IPV6_MREQ ${HAVE_STRUCT_IPV6_MREQ}
+#define HAVE_STRUCT_POLLFD ${HAVE_STRUCT_POLLFD}
+#define HAVE_STRUCT_RUSAGE_RU_MAXRSS ${HAVE_STRUCT_RUSAGE_RU_MAXRSS}
+#define HAVE_STRUCT_SCTP_EVENT_SUBSCRIBE ${HAVE_STRUCT_SCTP_EVENT_SUBSCRIBE}
+#define HAVE_STRUCT_SOCKADDR_IN6 ${HAVE_STRUCT_SOCKADDR_IN6}
+#define HAVE_STRUCT_SOCKADDR_SA_LEN ${HAVE_STRUCT_SOCKADDR_SA_LEN}
+#define HAVE_STRUCT_SOCKADDR_STORAGE ${HAVE_STRUCT_SOCKADDR_STORAGE}
+#define HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC ${HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC}
+#define HAVE_STRUCT_V4L2_FRMIVALENUM_DISCRETE ${HAVE_STRUCT_V4L2_FRMIVALENUM_DISCRETE}
+#define HAVE_ATOMICS_NATIVE ${HAVE_ATOMICS_NATIVE}
+#define HAVE_DOS_PATHS ${HAVE_DOS_PATHS}
+#define HAVE_DXVA2_LIB ${HAVE_DXVA2_LIB}
+#define HAVE_DXVA2API_COBJ ${HAVE_DXVA2API_COBJ}
+#define HAVE_LIBC_MSVCRT ${HAVE_LIBC_MSVCRT}
 #define HAVE_LIBDC1394_1 0
 #define HAVE_LIBDC1394_2 0
 #define HAVE_MAKEINFO 0
 #define HAVE_MAKEINFO_HTML 0
-#define HAVE_PERL 1
-#define HAVE_POD2MAN 1
+#define HAVE_PERL 0
+#define HAVE_POD2MAN 0
 #define HAVE_SDL 0
-#define HAVE_SECTION_DATA_REL_RO 0
+#define HAVE_SECTION_DATA_REL_RO ${HAVE_SECTION_DATA_REL_RO}
 #define HAVE_TEXI2HTML 0
 #define HAVE_THREADS ${HAVE_THREADS}
-#define HAVE_VAAPI_X11 0
-#define HAVE_VDPAU_X11 0
-#define HAVE_WINRT 0
-#define HAVE_XLIB 1
-#define CONFIG_BSFS 0	###################### We can stop once we get to here ##########################
+#define HAVE_VAAPI_X11 ${HAVE_VAAPI_X11}
+#define HAVE_VDPAU_X11 ${HAVE_VDPAU_X11}
+#define HAVE_WINRT ${HAVE_WINRT}
+#define HAVE_XLIB ${HAVE_XLIB}
+#define CONFIG_BSFS 0
 #define CONFIG_DECODERS 1
 #define CONFIG_ENCODERS 1
-#define CONFIG_HWACCELS 0
+#define CONFIG_HWACCELS ${CONFIG_HWACCELS}
 #define CONFIG_PARSERS 1
 #define CONFIG_INDEVS 0
 #define CONFIG_OUTDEVS 0
@@ -772,21 +905,21 @@ file(CONFIGURE
 #define CONFIG_MANPAGES 0
 #define CONFIG_PODPAGES 0
 #define CONFIG_TXTPAGES 0
-#define CONFIG_AVIO_READING_EXAMPLE 1
-#define CONFIG_AVIO_DIR_CMD_EXAMPLE 1
-#define CONFIG_DECODING_ENCODING_EXAMPLE 1
-#define CONFIG_DEMUXING_DECODING_EXAMPLE 1
-#define CONFIG_EXTRACT_MVS_EXAMPLE 1
+#define CONFIG_AVIO_READING_EXAMPLE 0
+#define CONFIG_AVIO_DIR_CMD_EXAMPLE 0
+#define CONFIG_DECODING_ENCODING_EXAMPLE 0
+#define CONFIG_DEMUXING_DECODING_EXAMPLE 0
+#define CONFIG_EXTRACT_MVS_EXAMPLE 0
 #define CONFIG_FILTER_AUDIO_EXAMPLE 0
 #define CONFIG_FILTERING_AUDIO_EXAMPLE 0
 #define CONFIG_FILTERING_VIDEO_EXAMPLE 0
-#define CONFIG_METADATA_EXAMPLE 1
-#define CONFIG_MUXING_EXAMPLE 1
+#define CONFIG_METADATA_EXAMPLE 0
+#define CONFIG_MUXING_EXAMPLE 0
 #define CONFIG_QSVDEC_EXAMPLE 0
-#define CONFIG_REMUXING_EXAMPLE 1
-#define CONFIG_RESAMPLING_AUDIO_EXAMPLE 1
-#define CONFIG_SCALING_VIDEO_EXAMPLE 1
-#define CONFIG_TRANSCODE_AAC_EXAMPLE 1
+#define CONFIG_REMUXING_EXAMPLE 0
+#define CONFIG_RESAMPLING_AUDIO_EXAMPLE 0
+#define CONFIG_SCALING_VIDEO_EXAMPLE 0
+#define CONFIG_TRANSCODE_AAC_EXAMPLE 0
 #define CONFIG_TRANSCODING_EXAMPLE 0
 #define CONFIG_AVISYNTH 0
 #define CONFIG_BZLIB 0
@@ -852,10 +985,10 @@ file(CONFIGURE
 #define CONFIG_LIBX264 0
 #define CONFIG_LIBX265 0
 #define CONFIG_LIBXAVS 0
-#define CONFIG_LIBXCB 1
-#define CONFIG_LIBXCB_SHM 1
-#define CONFIG_LIBXCB_SHAPE 1
-#define CONFIG_LIBXCB_XFIXES 1
+#define CONFIG_LIBXCB 0
+#define CONFIG_LIBXCB_SHM 0
+#define CONFIG_LIBXCB_SHAPE 0
+#define CONFIG_LIBXCB_XFIXES 0
 #define CONFIG_LIBXVID 0
 #define CONFIG_LIBZIMG 0
 #define CONFIG_LIBZMQ 0
@@ -872,8 +1005,8 @@ file(CONFIGURE
 #define CONFIG_SDL 0
 #define CONFIG_SECURETRANSPORT 0
 #define CONFIG_X11GRAB 0
-#define CONFIG_XLIB 1
-#define CONFIG_ZLIB 1
+#define CONFIG_XLIB ${HAVE_XLIB}
+#define CONFIG_ZLIB ${HAVE_ZLIB}
 #define CONFIG_FTRAPV 0
 #define CONFIG_GRAY 0
 #define CONFIG_HARDCODED_TABLES 0
@@ -884,10 +1017,10 @@ file(CONFIGURE
 #define CONFIG_STATIC 1
 #define CONFIG_SWSCALE_ALPHA 1
 #define CONFIG_D3D11VA 0
-#define CONFIG_DXVA2 0
-#define CONFIG_VAAPI 0
+#define CONFIG_DXVA2 ${HAVE_DXVA2_LIB}
+#define CONFIG_VAAPI ${HAVE_VAAPI_X11}
 #define CONFIG_VDA 0
-#define CONFIG_VDPAU 0
+#define CONFIG_VDPAU ${HAVE_VDPAU_X11}
 #define CONFIG_VIDEOTOOLBOX 0
 #define CONFIG_XVMC 1
 #define CONFIG_GPL 1

@@ -142,9 +142,8 @@ set(LIBAVCODEC_SOURCE_FILES
 	${LIBAVCODEC_SRC_DIR}/sinewin.c
 	${LIBAVCODEC_SRC_DIR}/startcode.c
 	${LIBAVCODEC_SRC_DIR}/tiff_common.c
-	${LIBAVCODEC_SRC_DIR}/utils.c
-#	${LIBAVCODEC_SRC_DIR}/vdpau.c	# I had this in my gmake-generated object files, but disabled hwaccels
-	${LIBAVCODEC_SRC_DIR}/videodsp.c	# if we conditionally append sources to add vpdpau, need cmake find package)
+	${LIBAVCODEC_SRC_DIR}/utils.c	
+	${LIBAVCODEC_SRC_DIR}/videodsp.c
 	${LIBAVCODEC_SRC_DIR}/vorbis_parser.c
 	${LIBAVCODEC_SRC_DIR}/xiph.c
 	${LIBAVCODEC_SRC_DIR}/xvididct.c
@@ -173,14 +172,20 @@ set(LIBAVCODEC_HEADERS
 if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/dxva2.c)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/dxva2_h264.c)
-	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/avcodecres.rc)
-	if (MSVC) # if LIBC_MSVCRT present; there may be a better/more accurate way to test for this
+	if(GNU_WINDRES OR MSVC)
+		list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/avcodecres.rc)
+	endif()
+	if (MSVC)
 		list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/file_open.c)
 	endif()
 elseif (Threads_FOUND) # PPSSPP root CMakeLists.txt has 'include(FindThreads)' so we should be able to call this here
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread.c)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread_slice.c)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread_frame.c)
+endif()
+
+if(VDPAU_X11)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/vdpau.c)
 endif()
 
 # Architecture-specific sources
