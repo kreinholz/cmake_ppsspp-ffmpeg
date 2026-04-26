@@ -9,11 +9,12 @@ find_package(Threads REQUIRED)
 # GNU windres isn't required, but used to compile Windows .rc files with MinGW. MSVC can also compile them
 find_package(GNU_WINDRES QUIET)
 find_package(ZLIB)
-pkg_check_modules(VAAPI_X11 libva-x11)
-pkg_check_modules(VDPAU_X11 vdpau)
 find_package(X11 QUIET)
-
-# To Do - create a variable to store COMPILER_Flags which we can then conditionally change based on the build target
+find_package(PkgConfig)
+if(PkgConfig_FOUND)
+	pkg_check_modules(VAAPI_X11 IMPORTED_TARGET libva-x11)
+	pkg_check_modules(VDPAU_X11 IMPORTED_TARGET vdpau)
+endif()
 
 # Assign appropriate Assembler settings based on architecture and target
 option(ENABLE_OPTIMIZATIONS "Build ffmpeg with architecture-specific optimizations and Machine Assembly code" OFF)
@@ -73,6 +74,8 @@ include(generated_headers.cmake)
 set(CMAKE_C_FLAGS "-fPIC")
 set(CMAKE_ASM_NASM_FLAGS "-DPIC ${ASM_ARCH} -P ${CMAKE_CURRENT_BINARY_DIR}/config.asm")
 
+# To Do - conditionally apply COMPILER_Flags based on the build target
+
 # Mimic the naming convention of current ppsspp-ffmpeg precompiled libraries and distributed headers
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_HOST_SYSTEM_NAME}/${CMAKE_SYSTEM_PROCESSOR}/lib)
 set(HEADER_INSTALL_DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/../include)
@@ -83,7 +86,7 @@ include(libs/libavcodec.cmake)
 add_library(avcodec STATIC ${LIBAVCODEC_SOURCE_FILES})
 target_precompile_headers(avcodec PRIVATE ${LIBAVUTIL_SRC_DIR}/internal.h ${LIBAVUTIL_SRC_DIR}/intmath.h)
 target_link_libraries(avcodec)
-target_include_directories(avcodec PRIVATE ${SRC_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(avcodec PRIVATE ${SRC_DIR} ${VDPAU_X11_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(avcodec INTERFACE ${LIBAVCODEC_HEADERS})	# expose libavcodec headers to PPSSPP build
 file(COPY ${LIBAVCODEC_HEADERS} DESTINATION ${HEADER_INSTALL_DIRECTORY}/libavcodec) # same, albeit the "old" way
 set(LIBAVCODEC_LIBRARY avcodec)

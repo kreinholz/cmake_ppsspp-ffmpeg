@@ -2,6 +2,11 @@
 
 # Generate config.h file
 include(CheckCSourceCompiles)
+include(CheckTypeSize)
+include(CheckStructHasMember)
+include(CheckSymbolExists)
+include(CheckFunctionExists)
+include(CheckIncludeFile)
 
 set(extern_prefix \"\")
 set(extern_asm "")
@@ -249,7 +254,6 @@ else()
 endif()
 
 # More tests--these came from ffmpeg's configure script EXCEPT missing header info for atomic_compare_exchange & sync_val_compare_and_swap which came from Google
-include(CheckSymbolExists)
 check_symbol_exists(atomic_cas_ptr "atomic.h" HAVE_ATOMIC_CAS_PTR)
 check_symbol_exists(atomic_compare_exchange_strong "stdatomic.h" HAVE_ATOMIC_COMPARE_EXCHANGE)
 check_symbol_exists(__machine_rw_barrier "mbarrier.h" HAVE_MACHINE_RW_BARRIER)
@@ -293,7 +297,6 @@ else()
 endif()
 
 # Function checks - cabs and cexp
-include(CheckFunctionExists)
 check_function_exists(cabs HAVE_CABS)
 check_function_exists(cexp HAVE_CEXP)
 assign_value(HAVE_CABS)
@@ -309,7 +312,6 @@ else()
 	set(HAVE_YASM 0)
 endif()
 
-include(CheckIncludeFile)
 # Check for presence of various headers on system--list taken from ffmpeg's configure
 foreach(header alsa_asoundlib_h altivec_h arpa_inet_h asm_types_h cdio_paranoia_h cdio_paranoia_paranoia_h dev_bktr_ioctl_bt848_h dev_bktr_ioctl_meteor_h dev_ic_bt8xx_h dev_video_bktr_ioctl_bt848_h dev_video_meteor_ioctl_meteor_h direct_h dirent_h dlfcn_h d3d11_h dxva_h ES2_gl_h gsm_h io_h mach_mach_time_h machine_ioctl_bt848_h machine_ioctl_meteor_h malloc_h opencv2_core_core_c_h openjpeg_2_1_openjpeg_h openjpeg_2_0_openjpeg_h openjpeg_1_5_openjpeg_h OpenGL_gl3_h poll_h sndio_h soundcard_h sys_mman_h sys_param_h sys_resource_h sys_select_h sys_soundcard_h sys_time_h sys_un_h sys_videoio_h termios_h udplite_h unistd_h valgrind_valgrind_h windows_h winsock2_h)
 	# convert header item to proper header format
@@ -322,15 +324,25 @@ foreach(header alsa_asoundlib_h altivec_h arpa_inet_h asm_types_h cdio_paranoia_
     assign_value(${RESULT_VAR} PARENT_SCOPE) # Fix this: works fine if 'true', does nothing if 'false'
 endforeach()
 
-# Math symbols can't be reliably tested with check_symbol_exists, so we have to use check_function_exists instead
 # Combined ffmpeg's configure math_func and system_funcs lists here since the check is the same
 # Note: I removed gmtime_r & localtime_r from this list as they were already tested for above
-foreach(math_func atanf atan2f cbrt cbrtf copysign cosf erf exp2 exp2f expf hypot isfinite isinf isnan ldexpf llrint llrintf log2 log2f log10f lrint lrintf powf rint round roundf sinf trunc truncf access aligned_malloc arc4random clock_gettime closesocket CommandLineToArgvW CoTaskMemFree CryptGenRandom dlopen fcntl flt_lim fork getaddrinfo gethrtime getopt GetProcessAffinityMask GetProcessMemoryInfo GetProcessTimes getrusage GetSystemTimeAsFileTime gettimeofday glob glXGetProcAddress inet_aton isatty jack_port_get_latency_range kbhit lstat lzo1x_999_compress mach_absolute_time MapViewOfFile memalign mkstemp mmap mprotect nanosleep PeekNamedPipe posix_memalign pthread_cancel sched_getaffinity SetConsoleTextAttribute SetConsoleCtrlHandler setmode setrlimit Sleep strerror_r sysconf sysctl usleep UTGetOSTypeFromString VirtualAlloc wglGetProcAddress)
+foreach(math_func atanf atan2f cbrt cbrtf copysign cosf erf exp2 exp2f expf hypot isfinite isinf isnan ldexpf llrint llrintf log2 log2f log10f lrint lrintf powf rint round roundf sinf trunc truncf)
     # Create a RESULT_VAR, properly formatted
     string(TOUPPER "${math_func}" uppercase_math_func)
     set(RESULT_VAR "HAVE_${uppercase_math_func}")
-    # Check whether the math function exists
-    check_function_exists(${math_func} ${RESULT_VAR})
+    # Check whether the math type is defined
+#    check_function_exists(${math_func} ${RESULT_VAR})
+	check_type_size(${math_func} ${RESULT_VAR})
+    assign_value(${RESULT_VAR} PARENT_SCOPE)
+endforeach()
+
+# To Do - don't copy and paste this function--it's sloppy coding.
+foreach(system_func access aligned_malloc arc4random clock_gettime closesocket CommandLineToArgvW CoTaskMemFree CryptGenRandom dlopen fcntl flt_lim fork getaddrinfo gethrtime getopt GetProcessAffinityMask GetProcessMemoryInfo GetProcessTimes getrusage GetSystemTimeAsFileTime gettimeofday glob glXGetProcAddress inet_aton isatty jack_port_get_latency_range kbhit lstat lzo1x_999_compress mach_absolute_time MapViewOfFile memalign mkstemp mmap mprotect nanosleep PeekNamedPipe posix_memalign pthread_cancel sched_getaffinity SetConsoleTextAttribute SetConsoleCtrlHandler setmode setrlimit Sleep strerror_r sysconf sysctl usleep UTGetOSTypeFromString VirtualAlloc wglGetProcAddress)
+    # Create a RESULT_VAR, properly formatted
+    string(TOUPPER "${system_func}" uppercase_system_func)
+    set(RESULT_VAR "HAVE_${uppercase_system_func}")
+    # Check whether the math type is defined
+    check_function_exists(${system_func} ${RESULT_VAR})
     assign_value(${RESULT_VAR} PARENT_SCOPE)
 endforeach()
 
@@ -400,8 +412,6 @@ assign_value(HAVE_XFORM_ASM)
 assign_value(HAVE_XMM_CLOBBERS)
 
 # Types
-include(CheckTypeSize)
-include(CheckStructHasMember)
 check_type_size("CONDITION_VARIABLE_Ptr" HAVE_CONDITION_VARIABLE_PTR)
 check_type_size("socklen_t" HAVE_SOCKLEN_T)
 check_type_size("struct addrinfo" HAVE_STRUCT_ADDRINFO)
