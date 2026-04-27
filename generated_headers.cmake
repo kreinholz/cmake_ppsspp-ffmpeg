@@ -34,7 +34,7 @@ endif()
 # Set the appropriate CPU variables
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*")
 	set(ARCH_AARCH64 1)
-	set(FAST_64BIT 1)
+	set(HAVE_FAST_64BIT 1)
 else()
 	set(ARCH_AARCH64 0)
 endif()
@@ -57,7 +57,7 @@ else()
 endif()
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*")
 	set(ARCH_X86_64 1)
-	set(FAST_64BIT 1)
+	set(HAVE_FAST_64BIT 1)
 	set(HAVE_FAST_CMOV 1)
 else()
 	set(ARCH_X86_64 0)
@@ -109,7 +109,7 @@ function(assign_value INPUT_VAR)
 	endif()
 endfunction()
 
-assign_value(FAST_64BIT)
+assign_value(HAVE_FAST_64BIT)
 assign_value(HAVE_FAST_CMOV)
 
 # The following tests, which use Copilot's function, are taken straight from ffmpeg-3.0.2's configure script
@@ -138,7 +138,28 @@ assign_value(HAVE_SETEND)
 #define HAVE_VSX 0
 
 # x86(_64) specific features - compiler test code suggested by Copilot AI
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*" AND ENABLE_OPTIMIZATIONS)
+	# Instead of actually testing for the following CPU features, turn them on since that's what ffmpeg's configure
+	# script apparently does, even non-Intel compatible, discontinued features like FMA4 and XOP, because they get
+	# set to 'true' on my Intel Xeon build system even though it lacks support for either of them or AMD3DNOWEXT
+	set(HAVE_AESNI 1)
+	set(HAVE_AMD3DNOW 1)
+	set(HAVE_AMD3DNOWEXT 1)
+	set(HAVE_AVX 1)
+	set(HAVE_AVX2 1)
+	set(HAVE_FMA3 1)
+	set(HAVE_FMA4 1)
+	set(HAVE_MMX 1)
+	set(HAVE_MMXEXT 1)
+	set(HAVE_SSE 1)
+	set(HAVE_SSE2 1)
+	set(HAVE_SSE3 1)
+	set(HAVE_SSE4 1)
+	set(HAVE_SSE42 1)
+	set(HAVE_SSSE3 1)
+	set(HAVE_XOP 1)
+	set(HAVE_CPUNOP 1)
+#[[
 	test_compiler_support("-maes" "#include <immintrin.h>\nint main(void){_mm_aesenc_si128(_mm_setzero_si128(), _mm_setzero_si128());return 0;}" HAVE_AESNI)
 	test_compiler_support("" "int main(void){__asm__ __volatile__(\"pfadd %%mm0, %%mm1\" ::: \"mm0\", \"mm1\");return 0;}" HAVE_AMD3DNOW)
 	test_compiler_support("" "int main(void){__asm__ __volatile__(\"pavgusb %%mm0, %%mm1\\n\" ::: \"mm0\", \"mm1\");return 0;}" HAVE_AMD3DNOWEXT)
@@ -156,7 +177,9 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.
 	test_compiler_support("-mssse3" "#include <immintrin.h>\nint main(void){_mm_abs_epi8(_mm_set1_epi8(-1));return 0;}" HAVE_SSSE3)
 	test_compiler_support("-mxop" "#include <immintrin.h>\nint main(void){_mm256_roti_epi32(_mm256_set1_epi32(1), 1);return 0;}" HAVE_XOP)
 	test_compiler_support("" "int main(void){__asm__ __volatile__(\"nop\");return 0;}" HAVE_CPUNOP)
+]]
 endif()
+
 # Note - we only want to run the above tests on x86(_64); but we still want to assign a "1" or "0" value in config.h
 assign_value(HAVE_AESNI)
 assign_value(HAVE_AMD3DNOW)
@@ -444,7 +467,7 @@ assign_value(HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC)
 assign_value(HAVE_STRUCT_V4L2_FRMIVALENUM_DISCRETE)
 
 # Deal with if(GNU_WINDRES) setting HAVE_GNU_WINDRES to "1")
-if(GNU_WINDRES)
+if(GNU_WINDRES_FOUND)
 	set(HAVE_GNU_WINDRES 1)
 else()
 	set(HAVE_GNU_WINDRES 0)
@@ -484,7 +507,7 @@ if(VDPAU_X11_FOUND)
 else()
 	set(HAVE_VDPAU_X11 0)
 endif()
-if(X11)
+if(X11_FOUND)
 	set(HAVE_XLIB 1)
 else()
 	set(HAVE_XLIB 0)
@@ -500,15 +523,10 @@ else()
 	set(CONFIG_HWACCELS 0)
 endif()
 
-if(ZLIB)
+if(ZLIB_FOUND)
 	set(HAVE_ZLIB 1)
 else()
 	set(HAVE_ZLIB 0)
-endif()
-if(X11)
-	set(HAVE_XLIB 1)
-else()
-	set(HAVE_XLIB 0)
 endif()
 
 file(CONFIGURE
@@ -687,7 +705,7 @@ file(CONFIGURE
 #define HAVE_LOONGSON3_INLINE ${HAVE_LOONGSON3}
 #define HAVE_MMI_INLINE ${HAVE_MMI}
 #define HAVE_ALIGNED_STACK ${ALIGNED_STACK}
-#define HAVE_FAST_64BIT 1 ${HAVE_FAST_64BIT}
+#define HAVE_FAST_64BIT ${HAVE_FAST_64BIT}
 #define HAVE_FAST_CLZ 1
 #define HAVE_FAST_CMOV ${HAVE_FAST_CMOV}
 #define HAVE_LOCAL_ALIGNED_8 ${HAVE_LOCAL_ALIGNED_8}
@@ -739,7 +757,7 @@ file(CONFIGURE
 #define HAVE_OPENCV2_CORE_CORE_C_H ${HAVE_OPENCV2_CORE_CORE_C_H}
 #define HAVE_OPENJPEG_2_1_OPENJPEG_H ${HAVE_OPENJPEG_2_1_OPENJPEG_H}
 #define HAVE_OPENJPEG_2_0_OPENJPEG_H ${HAVE_OPENJPEG_2_0_OPENJPEG_H}
-#define HAVE_OPENJPEG_1_5_OPENJPEG_H ${HAVE_OPENJPEG_1_5_OPENJPE}
+#define HAVE_OPENJPEG_1_5_OPENJPEG_H ${HAVE_OPENJPEG_1_5_OPENJPEG_H}
 #define HAVE_OPENGL_GL3_H ${HAVE_OPENGL_GL3_H}
 #define HAVE_POLL_H ${HAVE_POLL_H}
 #define HAVE_SNDIO_H ${HAVE_SNDIO_H}
@@ -995,10 +1013,10 @@ file(CONFIGURE
 #define CONFIG_LIBX264 0
 #define CONFIG_LIBX265 0
 #define CONFIG_LIBXAVS 0
-#define CONFIG_LIBXCB 0
-#define CONFIG_LIBXCB_SHM 0
-#define CONFIG_LIBXCB_SHAPE 0
-#define CONFIG_LIBXCB_XFIXES 0
+#define CONFIG_LIBXCB ${HAVE_XLIB}
+#define CONFIG_LIBXCB_SHM ${HAVE_XLIB}
+#define CONFIG_LIBXCB_SHAPE ${HAVE_XLIB}
+#define CONFIG_LIBXCB_XFIXES ${HAVE_XLIB}
 #define CONFIG_LIBXVID 0
 #define CONFIG_LIBZIMG 0
 #define CONFIG_LIBZMQ 0
