@@ -8,6 +8,18 @@ include(CheckSymbolExists)
 include(CheckFunctionExists)
 include(CheckIncludeFile)
 
+include(configure_functions.cmake)
+
+# Test function
+set(HAVE_ff_extern 0)
+check_cc(ff_extern "int main(void){ return 0; };" HAVE_ff_extern)
+# NOTE: the above exists solely to demonstrate HOW to properly call the check_cc() function, and should be removed.
+
+set(HAVE_INLINE_ASM_LABELS 0)
+check_inline_asm(inline_asm_labels [["1:\n"]] HAVE_INLINE_ASM_LABELS)
+# NOTE: the above is another demonstration, although it's also a real check that we'll use
+
+#[[
 set(extern_prefix \"\")
 set(extern_asm "")
 set(build_suffix \"\")
@@ -100,15 +112,6 @@ function(test_compiler_support FLAG TEST_CODE RESULT_VAR)
 	set(CMAKE_REQUIRED_FLAGS "${__OLD_FLAGS}")
 endfunction()
 
-# Very short convenience function (written by me) to set specified variable to "1" if defined, "0" if undefined
-function(assign_value INPUT_VAR)
-	if(${INPUT_VAR})
-		set(${INPUT_VAR} 1 PARENT_SCOPE)
-	else()
-		set(${INPUT_VAR} 0 PARENT_SCOPE)
-	endif()
-endfunction()
-
 assign_value(HAVE_FAST_64BIT)
 assign_value(HAVE_FAST_CMOV)
 
@@ -159,25 +162,6 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.
 	set(HAVE_SSSE3 1)
 	set(HAVE_XOP 1)
 	set(HAVE_CPUNOP 1)
-#[[
-	test_compiler_support("-maes" "#include <immintrin.h>\nint main(void){_mm_aesenc_si128(_mm_setzero_si128(), _mm_setzero_si128());return 0;}" HAVE_AESNI)
-	test_compiler_support("" "int main(void){__asm__ __volatile__(\"pfadd %%mm0, %%mm1\" ::: \"mm0\", \"mm1\");return 0;}" HAVE_AMD3DNOW)
-	test_compiler_support("" "int main(void){__asm__ __volatile__(\"pavgusb %%mm0, %%mm1\\n\" ::: \"mm0\", \"mm1\");return 0;}" HAVE_AMD3DNOWEXT)
-	test_compiler_support("-mavx" "#include <immintrin.h>\nint main(void){__m256 a=_mm256_setzero_ps();return 0;}" HAVE_AVX)
-	test_compiler_support("-mavx2" "#include <immintrin.h>\nint main(void){__m256i a=_mm256_setzero_si256();return 0;}" HAVE_AVX2)
-	test_compiler_support("-mfma" "#include <immintrin.h>\nint main(void){_mm256_fmadd_ps(_mm256_set1_ps(1.0f), _mm256_set1_ps(2.0f), _mm256_set1_ps(3.0f));return 0;}" HAVE_FMA3)
-	test_compiler_support("-mfma" "#include <immintrin.h>\nint main(void){_mm256_macc_ps(_mm256_set1_ps(1.0f), _mm256_set1_ps(2.0f), _mm256_set1_ps(3.0f));return 0;}" HAVE_FMA4)
-	test_compiler_support("-mmmx" "#include <mmintrin.h>\nint main(void){_mm_empty();return 0;}" HAVE_MMX)
-	test_compiler_support("-mmmx" "#include <mmintrin.h>\n#include <xmmintrin.h>\nint main(void){__m64 a = _mm_setzero_si64();return 0;}" HAVE_MMXEXT)
-	test_compiler_support("-msse" "#include <xmmintrin.h>\nint main(void){__m128 a=_mm_setzero_ps();return 0;}" HAVE_SSE)
-	test_compiler_support("-msse2" "#include <emmintrin.h>\nint main(void){ __m128d a=_mm_setzero_pd();return 0;}" HAVE_SSE2)
-	test_compiler_support("-msse3" "#include <pmmintrin.h>\nint main(void){__m128 a=_mm_hadd_ps(_mm_setzero_ps(),_mm_setzero_ps());return 0;}" HAVE_SSE3)
-	test_compiler_support("-msse4.1" "#include <smmintrin.h>\nint main(void){__m128i a=_mm_blend_epi16(_mm_setzero_si128(),_mm_setzero_si128(),0xF0);return 0;}" HAVE_SSE4)
-	test_compiler_support("-msse4.2" "#include <nmmintrin.h>\nint main(void){int r=_mm_crc32_u32(0,0);return 0;}" HAVE_SSE42)
-	test_compiler_support("-mssse3" "#include <immintrin.h>\nint main(void){_mm_abs_epi8(_mm_set1_epi8(-1));return 0;}" HAVE_SSSE3)
-	test_compiler_support("-mxop" "#include <immintrin.h>\nint main(void){_mm256_roti_epi32(_mm256_set1_epi32(1), 1);return 0;}" HAVE_XOP)
-	test_compiler_support("" "int main(void){__asm__ __volatile__(\"nop\");return 0;}" HAVE_CPUNOP)
-]]
 endif()
 
 # Note - we only want to run the above tests on x86(_64); but we still want to assign a "1" or "0" value in config.h
@@ -354,7 +338,6 @@ foreach(math_func atanf atan2f cbrt cbrtf copysign cosf erf exp2 exp2f expf hypo
     string(TOUPPER "${math_func}" uppercase_math_func)
     set(RESULT_VAR "HAVE_${uppercase_math_func}")
     # Check whether the math type is defined
-#    check_function_exists(${math_func} ${RESULT_VAR})
 	check_type_size(${math_func} ${RESULT_VAR})
     assign_value(${RESULT_VAR} PARENT_SCOPE)
 endforeach()
@@ -364,7 +347,7 @@ foreach(system_func access aligned_malloc arc4random clock_gettime closesocket C
     # Create a RESULT_VAR, properly formatted
     string(TOUPPER "${system_func}" uppercase_system_func)
     set(RESULT_VAR "HAVE_${uppercase_system_func}")
-    # Check whether the math type is defined
+    # Check whether the system function is defined
     check_function_exists(${system_func} ${RESULT_VAR})
     assign_value(${RESULT_VAR} PARENT_SCOPE)
 endforeach()
@@ -404,7 +387,7 @@ test_compiler_support("" "int main() {\nregister int r __asm__(\"ebx\");\nr = 0;
 test_compiler_support("" "__asm__(\".section .text\");\nint main() { return 0; }" HAVE_GNU_AS)
 test_compiler_support("" "__asm__(\".using mydata,12\");\nint main() { return 0; }" HAVE_IBM_ASM)
 test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\".globl mylabel\\nmylabel:\");\nreturn 0;}" HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS)
-test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\"jmp 1f\\n1:\\n\");\nreturn 0;}" HAVE_INLINE_ASM_LABELS)
+#test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\"jmp 1f\\n1:\\n\");\nreturn 0;}" HAVE_INLINE_ASM_LABELS)
 test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\"jmp global_label\\n.global global_label\\nglobal_label:\");\nreturn 0;}" HAVE_INLINE_ASM_NONLOCAL_LABELS)
 test_compiler_support("" "#include <stdio.h>\nint main(void){#pragma deprecated\nint x = 0;\nreturn 0;}" HAVE_PRAGMA_DEPRECATED)
 test_compiler_support("" "#include <stdio.h>\nint main(void){#ifndef RSYNC_CONTIMEOUT\n#define RSYNC_CONTIMEOUT 30\n#endif\nreturn 0;}" HAVE_RSYNC_CONTIMEOUT)
@@ -528,14 +511,14 @@ if(ZLIB_FOUND)
 else()
 	set(HAVE_ZLIB 0)
 endif()
-
+]]
 file(CONFIGURE
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/config.h"
 	CONTENT
 "/* Generated by cmake courtesy of kreinholz's hacks */
 #ifndef FFMPEG_CONFIG_H
 #define FFMPEG_CONFIG_H
-#define FFMPEG_CONFIGURATION \"this is where configuration options are normally listed, although technically we don't need them and ffmpeg builds just fine in a pure cmake environment without them\"
+#define FFMPEG_CONFIGURATION \"this is where configure options are normally listed, although technically we don't need them and ffmpeg builds just fine in a pure cmake environment without them\"
 #define FFMPEG_LICENSE \"GPL version 2 or later\"
 #define CONFIG_THIS_YEAR 2016
 #define FFMPEG_DATADIR ${CMAKE_CURRENT_BINARY_DIR}
