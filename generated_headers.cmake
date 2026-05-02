@@ -65,12 +65,12 @@ set(mathfuncs "atanf;atan2f;cbrt;cbrtf;copysign;cosf;erf;exp2;exp2f;expf;hypot;i
 
 foreach(func IN LISTS mathfuncs )
 	string(TOUPPER ${func} uppercase_func)
-	check_mathfunc(${func} ${func} HAVE_${uppercase_func})
+	check_mathfunc(${func} ${func} "-lm" HAVE_${uppercase_func})
 endforeach()
 # Example of testing listed mathfuncs using the check_mathfuncs function. This is a real test we'll use
 
 set(HAVE_ARC4RANDOM 0)
-check_func_headers(arc4random "<stdlib.h>" arc4random HAVE_ARC4RANDOM)
+check_func_headers(arc4random "<stdlib.h>" arc4random "" HAVE_ARC4RANDOM)
 # Example of testing for function arc4random in header file stdlib.h. This is a real test we'll use
 
 set(ARCH_X86_64 0)
@@ -80,6 +80,11 @@ check_cpp_condition(x86_64 "stddef.h" "defined(__x86_64__)" ARCH_X86_64)
 set(HAVE_PTHREAD_JOIN 0)
 check_lib(pthread_join "pthread.h" "pthread_join" HAVE_PTHREAD_JOIN)
 # WIP example; we actually test for both PTHREAD_JOIN and PTHREAD_CREATE, and only if BOTH are found, enable pthreads with HAVE_PTHREADS
+
+set(HAVE_VAAPI 0)
+check_lib2(vaapi "<va/va.h>;<va/va_x11.h>" "vaGetDisplay" "" HAVE_VAAPI)
+set(HAVE_BZLIB 0)
+check_lib2(bzlib "<bzlib.h>" "BZ2_bzlibVersion" "-lbz2" HAVE_BZLIB)
 
 #[[
 set(extern_prefix \"\")
