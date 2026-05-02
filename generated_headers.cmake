@@ -19,6 +19,48 @@ set(HAVE_INLINE_ASM_LABELS 0)
 check_inline_asm(inline_asm_labels [["1:\n"]] HAVE_INLINE_ASM_LABELS)
 # NOTE: the above is another demonstration, although it's also a real check that we'll use
 
+set(HAVE_NEON 0)
+set(HAVE_NEON_INLINE 0)
+set(HAVE_NEON_EXTERNAL 0)
+check_insn(neon [["ext   v0.8B, v0.8B, v1.8B, #1"]] HAVE_NEON HAVE_NEON_INLINE HAVE_NEON_EXTERNAL)
+# Note: the above is a demonstration of how to run checks using the check_insn() function, which is only for ARM
+# FIXME: this test fails currently. I need to enable Neon in cmake AND potentially include <arm_neon.h> in the inline_asm test code--adding another argument to check_inline_asm() to allow for passing names of header files
+
+set(HAVE_PTHREADS 0)
+check_code(pthreads cc "<pthread.h>;<stdio.h>" "static pthread_mutex_t atomic_lock = PTHREAD_MUTEX_INITIALIZER" HAVE_PTHREADS)
+# Note: the above is a demonstration of how to run checks using the check_code() function. The actual check in
+# ffmpeg's configure script only uses one header, <pthread.h>, but the above is to demonstrate how to pass
+# multiple header files to the function
+
+set(HAVE_AVX2_EXTERNAL 0)
+check_yasm(avx2_external "vextracti128 xmm0, ymm0, 0" HAVE_AVX2_EXTERNAL)
+# Example of how to call check_yasm(); this also happens to be an actual test we'll use
+
+set(HAVE_DIRECT_H 0)
+set(HAVE_DIRENT_H 0)
+check_header(direct_h "direct.h" HAVE_DIRECT_H)
+check_header(dirent_h "dirent.h" HAVE_DIRENT_H)
+# Examples of the first two header checks starting at line 5333 of ffmpeg configure; shows how to call check_header()
+
+set(HAVE_VFP_ARGS 0)
+check_ld(vfp_args [[__asm__ (".eabi_attribute 28, 1")\; int main(void) { return 0\; }]] "" HAVE_VFP_ARGS)
+# Note: the test code has to be modified within double-brackets to escape special characters such as semicolons
+
+set(HAVE_LD_FLAGS 0)
+check_ld(ld_flags "int main(void){ return 0\; }" "" HAVE_LD_FLAGS)
+# Example of a successful test calling check_ld, for a fake test with a RESULT_VAR not used in config.h
+# NOTE: the third argument is for any system lib needed, i.e. libm for the complex functions...
+
+set(HAVE_DLOPEN 0)
+check_func(dlopn dlopen HAVE_DLOPEN)
+# Example of a successful test calling check_func, and a real test we'll use
+
+set(HAVE_CABS 0)
+check_complexfunc(cabs cabs HAVE_CABS)
+
+set(HAVE_CEXP 0)
+check_complexfunc(cexp cexp HAVE_CEXP)
+
 #[[
 set(extern_prefix \"\")
 set(extern_asm "")
@@ -603,7 +645,7 @@ file(CONFIGURE
 #define HAVE_ARMV6_EXTERNAL ${HAVE_ARMV6}
 #define HAVE_ARMV6T2_EXTERNAL ${HAVE_ARMV6T2}
 #define HAVE_ARMV8_EXTERNAL ${ARCH_AARCH64}
-#define HAVE_NEON_EXTERNAL ${HAVE_NEON}
+#define HAVE_NEON_EXTERNAL ${HAVE_NEON_EXTERNAL}
 #define HAVE_VFP_EXTERNAL ${HAVE_VFP}
 #define HAVE_VFPV3_EXTERNAL ${HAVE_VFPV3}
 #define HAVE_SETEND_EXTERNAL ${HAVE_SETEND}
@@ -617,7 +659,7 @@ file(CONFIGURE
 #define HAVE_AMD3DNOW_EXTERNAL ${HAVE_AMD3DNOW}
 #define HAVE_AMD3DNOWEXT_EXTERNAL ${HAVE_AMD3DNOWEXT}
 #define HAVE_AVX_EXTERNAL ${HAVE_AVX}
-#define HAVE_AVX2_EXTERNAL ${HAVE_AVX2}
+#define HAVE_AVX2_EXTERNAL ${HAVE_AVX2_EXTERNAL}
 #define HAVE_FMA3_EXTERNAL ${HAVE_FMA3}
 #define HAVE_FMA4_EXTERNAL ${HAVE_FMA4}
 #define HAVE_MMX_EXTERNAL ${HAVE_MMX}
@@ -647,7 +689,7 @@ file(CONFIGURE
 #define HAVE_ARMV6_INLINE ${HAVE_ARMV6}
 #define HAVE_ARMV6T2_INLINE ${HAVE_ARMV6T2}
 #define HAVE_ARMV8_INLINE ${ARCH_AARCH64}
-#define HAVE_NEON_INLINE ${HAVE_NEON}
+#define HAVE_NEON_INLINE ${HAVE_NEON_INLINE}
 #define HAVE_VFP_INLINE ${HAVE_VFP}
 #define HAVE_VFPV3_INLINE ${HAVE_VFPV3}
 #define HAVE_SETEND_INLINE ${HAVE_SETEND}
