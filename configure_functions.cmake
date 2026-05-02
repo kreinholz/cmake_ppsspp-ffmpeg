@@ -241,3 +241,54 @@ function(check_mathfunc target func RESULT_VAR)
 		set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 	endif()
 endfunction()
+
+# Rewrite of ffmpeg's check_func_headers function at line 1116 of configure script
+function(check_func_headers target headers funcs RESULT_VAR)
+	# Check whether more than 1 header file was passed as an argument
+	list(LENGTH headers len)
+	if (len GREATER 1)
+		foreach(header IN LISTS headers)
+			string(APPEND HEADERS_STRING "#include ${header}\n")
+		endforeach()
+	else()
+		set(HEADERS_STRING "#include ${headers}")
+	endif()
+	# Check whether more than 1 function to test was passed as an argument
+	list(LENGTH funcs len)
+	if (len GREATER 1)
+		foreach(func IN LISTS funcs)
+			string(APPEND FUNCS_STRING "long check_${func}(void) { return (long) ${func}\; }\n")
+		endforeach()
+	else()
+		set(FUNCS_STRING "long check_${funcs}(void) { return (long) ${funcs}\; }\n")
+	endif()
+	set(TEST_CODE "${HEADERS_STRING}\n${FUNCS_STRING}\nint main(void) { return 0\; }")
+	check_ld(${target} "${TEST_CODE}" "" ${RESULT_VAR})
+	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
+	# To Do: in ffmpeg's configure script, some results prompt adding additional system libs.
+	# Maybe we tally up a list of such system libs and at the end of all these tests, try linking them to the
+	# appropriate ffmpeg lib (if any) the cmake way? Will have to try find_package or find_library first, then
+	# fallback on PkgConfig if needed. Although since these *should* all be system libs, find_library should suffice
+	# Frankly, we could probably read from the HAVE_ variables directly, and conditionally add libraries at the end
+endfunction()
+
+# Rewrite of ffmpeg's check_cpp_condition function at line 1151 of configure script
+function(check_cpp_condition target header condition RESULT_VAR)
+	set(HEADER_STRING "#include <${header}>")
+	set(CONDITION_STRING "#if !\(${condition})\n#error \"unsatisfied condition: ${condition}\"\n#endif")
+	set(TEST_CODE "${HEADER_STRING}\n${CONDITION_STRING}\nint x\;")
+	check_cxx(${target} ${TEST_CODE} ${RESULT_VAR})
+	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
+endfunction()
+
+# Rewrite of ffmpeg's check_lib function at line 1164 of configure script
+function(check_lib target header func RESULT_VAR)
+	set(HEADER_STRING "${header}")
+	set(FUNC_STRING "${func}")
+	set(HEADER_RESULT_VAR "HEADER_${RESULT_VAR}")
+	check_header("${target}_header" "${HEADER_STRING}" ${HEADER_RESULT_VAR})
+	if (${HEADER_RESULT_VAR} EQUAL 1)
+		check_func(${target} "${func}" ${RESULT_VAR})
+	endif()
+	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
+endfunction()

@@ -67,6 +67,19 @@ foreach(func IN LISTS mathfuncs )
 	string(TOUPPER ${func} uppercase_func)
 	check_mathfunc(${func} ${func} HAVE_${uppercase_func})
 endforeach()
+# Example of testing listed mathfuncs using the check_mathfuncs function. This is a real test we'll use
+
+set(HAVE_ARC4RANDOM 0)
+check_func_headers(arc4random "<stdlib.h>" arc4random HAVE_ARC4RANDOM)
+# Example of testing for function arc4random in header file stdlib.h. This is a real test we'll use
+
+set(ARCH_X86_64 0)
+check_cpp_condition(x86_64 "stddef.h" "defined(__x86_64__)" ARCH_X86_64)
+# Example of using check_cpp_condition
+
+set(HAVE_PTHREAD_JOIN 0)
+check_lib(pthread_join "pthread.h" "pthread_join" HAVE_PTHREAD_JOIN)
+# WIP example; we actually test for both PTHREAD_JOIN and PTHREAD_CREATE, and only if BOTH are found, enable pthreads with HAVE_PTHREADS
 
 #[[
 set(extern_prefix \"\")
