@@ -61,6 +61,13 @@ check_complexfunc(cabs cabs HAVE_CABS)
 set(HAVE_CEXP 0)
 check_complexfunc(cexp cexp HAVE_CEXP)
 
+set(mathfuncs "atanf;atan2f;cbrt;cbrtf;copysign;cosf;erf;exp2;exp2f;expf;hypot;isfinite;isinf;isnan;ldexpf;llrint;llrintf;log2;log2f;log10f;lrint;lrintf;powf;rint;round;roundf;sinf;trunc;truncf")
+
+foreach(func IN LISTS mathfuncs )
+	string(TOUPPER ${func} uppercase_func)
+	check_mathfunc(${func} ${func} HAVE_${uppercase_func})
+endforeach()
+
 #[[
 set(extern_prefix \"\")
 set(extern_asm "")
