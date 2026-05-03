@@ -193,9 +193,14 @@ function(check_code target compiler headers ARGUMENTS RESULT_VAR)
 	else()
 		set(HEADERS_STRING "#include ${headers}")
 	endif()
-	set(TEST_CODE "${HEADERS_STRING}\nint main(void) { ${ARGUMENTS};\nreturn 0; }")
 	set(test_func "check_${compiler}")
-	cmake_language(CALL ${test_func} ${target} "${TEST_CODE}" ${RESULT_VAR})
+	if (NOT ${test_func} STREQUAL "check_ld")
+		set(TEST_CODE "${HEADERS_STRING}\nint main(void) { ${ARGUMENTS};\nreturn 0; }")
+		cmake_language(CALL ${test_func} ${target} "${TEST_CODE}" ${RESULT_VAR})
+	else()
+		set(TEST_CODE "${HEADERS_STRING}\nint main(void) { ${ARGUMENTS}\;\nreturn 0\; }")
+		cmake_language(CALL ${test_func} ${target} "${TEST_CODE}" "" ${RESULT_VAR})
+	endif()
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
 
@@ -301,4 +306,23 @@ function(check_lib2 target headers funcs lib RESULT_VAR)
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
 
-# Rewrite of ffmpeg's check_exec_crash function at line 1207 of configure script
+# Rewrite of ffmpeg's check_type function at line 1237 of configure script
+function(check_type target headers type RESULT_VAR)
+	check_code(${target} cc "${headers}" "${type} v" ${RESULT_VAR})
+	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
+	# Note: configure actually runs 'enable_safe' on "${type}" if the check passes
+endfunction()
+
+# Rewrite of ffmpeg's check_struct function at line 1246 of configure script
+function(check_struct target headers struct member RESULT_VAR)
+	check_code(${target} cc "${headers}" "const void *p = &((${struct} *)0)->${member}" ${RESULT_VAR})
+	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
+	# Note: configure actually runs 'enable_safe' on "${struct}_${member}" if the check passes
+endfunction()
+
+# Rewrite of ffmpeg's check_builtin function at line 1257 of configure script
+function(check_builtin target headers builtin RESULT_VAR)
+	check_code(${target} ld "${headers}" "${builtin}" ${RESULT_VAR})
+	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
+	# Note: configure actually invokes check_code with an incorrect/extra number of arguments!
+endfunction()

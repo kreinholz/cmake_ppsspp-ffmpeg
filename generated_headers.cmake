@@ -85,6 +85,22 @@ set(HAVE_VAAPI 0)
 check_lib2(vaapi "<va/va.h>;<va/va_x11.h>" "vaGetDisplay" "" HAVE_VAAPI)
 set(HAVE_BZLIB 0)
 check_lib2(bzlib "<bzlib.h>" "BZ2_bzlibVersion" "-lbz2" HAVE_BZLIB)
+# Example of how to call check_lib2
+
+set(NETDB_TEST 0)
+check_type(addrinfo "<netdb.h>" "struct addrinfo" NETDB_TEST)
+# Note: example of how to call check_type; however, configure doesn't return a variable, it runs enable_safe if OK
+
+set(SA_LEN_TEST 0)
+check_struct(sa_len "<sys/types.h>;<sys/socket.h>" "struct sockaddr" sa_len SA_LEN_TEST)
+# Note: example of how to call check_struct; however, configure doesn't directly set a variable but uses in conditions
+
+set(RDTSC_TEST 0)
+check_builtin(rdtsc "<intrin.h>" "__rdtsc()" RDTSC_TEST)
+
+set(HAVE_LOCALTIME_R 0)
+check_builtin(time_r "<time.h>" "time_t *time\; struct tm *tm\; localtime_r(time, tm)" HAVE_LOCALTIME_R)
+# Note: example of how to call check_builtin; however, configure uses results to conditionally enable features
 
 #[[
 set(extern_prefix \"\")
