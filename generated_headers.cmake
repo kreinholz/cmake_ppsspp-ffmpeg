@@ -10,591 +10,300 @@ include(CheckIncludeFile)
 
 include(configure_functions.cmake)
 
-# Test function
-set(HAVE_ff_extern 0)
-check_cc(ff_extern "int main(void){ return 0; };" HAVE_ff_extern)
-# NOTE: the above exists solely to demonstrate HOW to properly call the check_cc() function, and should be removed.
+# Check for extern_prefix
+check_cc(ff_extern "int ff_extern;" HAVE_ff_extern)
+execute_process(
+    COMMAND nm "${CONFIG_TESTS_DIR}/ff_extern.o"
+    OUTPUT_VARIABLE NM_RESULT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+file(WRITE "${CONFIG_TESTS_DIR}/nm_ff_extern" "${NM_RESULT}")
+execute_process(
+    COMMAND awk "/ff_extern/{ print substr($0, match($0, /[^ \t]*ff_extern/)) }" "${CONFIG_TESTS_DIR}/nm_ff_extern"
+    OUTPUT_VARIABLE AWK_RESULT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+set(extern_prefix_orig \"${AWK_RESULT}\")
+string(REGEX REPLACE "ff_extern" "" extern_prefix "${extern_prefix_orig}")
+# Note: when I run the nm and awk commands, piped, in a shell, I don't have to do a regex replace of "ff_extern"
 
-set(HAVE_INLINE_ASM_LABELS 0)
-check_inline_asm(inline_asm_labels [["1:\n"]] HAVE_INLINE_ASM_LABELS)
-# NOTE: the above is another demonstration, although it's also a real check that we'll use
-
-set(HAVE_NEON 0)
-set(HAVE_NEON_INLINE 0)
-set(HAVE_NEON_EXTERNAL 0)
-check_insn(neon [["ext   v0.8B, v0.8B, v1.8B, #1"]] HAVE_NEON HAVE_NEON_INLINE HAVE_NEON_EXTERNAL)
-# Note: the above is a demonstration of how to run checks using the check_insn() function, which is only for ARM
-# FIXME: this test fails currently. I need to enable Neon in cmake AND potentially include <arm_neon.h> in the inline_asm test code--adding another argument to check_inline_asm() to allow for passing names of header files
-
-set(HAVE_PTHREADS 0)
-check_code(pthreads cc "<pthread.h>;<stdio.h>" "static pthread_mutex_t atomic_lock = PTHREAD_MUTEX_INITIALIZER" HAVE_PTHREADS)
-# Note: the above is a demonstration of how to run checks using the check_code() function. The actual check in
-# ffmpeg's configure script only uses one header, <pthread.h>, but the above is to demonstrate how to pass
-# multiple header files to the function
-
-set(HAVE_AVX2_EXTERNAL 0)
-check_yasm(avx2_external "vextracti128 xmm0, ymm0, 0" HAVE_AVX2_EXTERNAL)
-# Example of how to call check_yasm(); this also happens to be an actual test we'll use
-
-set(HAVE_DIRECT_H 0)
-set(HAVE_DIRENT_H 0)
-check_header(direct_h "direct.h" HAVE_DIRECT_H)
-check_header(dirent_h "dirent.h" HAVE_DIRENT_H)
-# Examples of the first two header checks starting at line 5333 of ffmpeg configure; shows how to call check_header()
-
-set(HAVE_VFP_ARGS 0)
-check_ld(vfp_args [[__asm__ (".eabi_attribute 28, 1")\; int main(void) { return 0\; }]] "" HAVE_VFP_ARGS)
-# Note: the test code has to be modified within double-brackets to escape special characters such as semicolons
-
-set(HAVE_LD_FLAGS 0)
-check_ld(ld_flags "int main(void){ return 0\; }" "" HAVE_LD_FLAGS)
-# Example of a successful test calling check_ld, for a fake test with a RESULT_VAR not used in config.h
-# NOTE: the third argument is for any system lib needed, i.e. libm for the complex functions...
-
-set(HAVE_DLOPEN 0)
-check_func(dlopn dlopen HAVE_DLOPEN)
-# Example of a successful test calling check_func, and a real test we'll use
-
-set(HAVE_CABS 0)
-check_complexfunc(cabs cabs HAVE_CABS)
-
-set(HAVE_CEXP 0)
-check_complexfunc(cexp cexp HAVE_CEXP)
-
-set(mathfuncs "atanf;atan2f;cbrt;cbrtf;copysign;cosf;erf;exp2;exp2f;expf;hypot;isfinite;isinf;isnan;ldexpf;llrint;llrintf;log2;log2f;log10f;lrint;lrintf;powf;rint;round;roundf;sinf;trunc;truncf")
-
-foreach(func IN LISTS mathfuncs )
-	string(TOUPPER ${func} uppercase_func)
-	check_mathfunc(${func} ${func} "-lm" HAVE_${uppercase_func})
-endforeach()
-# Example of testing listed mathfuncs using the check_mathfuncs function. This is a real test we'll use
-
-set(HAVE_ARC4RANDOM 0)
-check_func_headers(arc4random "<stdlib.h>" arc4random "" HAVE_ARC4RANDOM)
-# Example of testing for function arc4random in header file stdlib.h. This is a real test we'll use
-
-set(ARCH_X86_64 0)
-check_cpp_condition(x86_64 "stddef.h" "defined(__x86_64__)" ARCH_X86_64)
-# Example of using check_cpp_condition
-
-set(HAVE_PTHREAD_JOIN 0)
-check_lib(pthread_join "pthread.h" "pthread_join" HAVE_PTHREAD_JOIN)
-# WIP example; we actually test for both PTHREAD_JOIN and PTHREAD_CREATE, and only if BOTH are found, enable pthreads with HAVE_PTHREADS
-
-set(HAVE_VAAPI 0)
-check_lib2(vaapi "<va/va.h>;<va/va_x11.h>" "vaGetDisplay" "" HAVE_VAAPI)
-set(HAVE_BZLIB 0)
-check_lib2(bzlib "<bzlib.h>" "BZ2_bzlibVersion" "-lbz2" HAVE_BZLIB)
-# Example of how to call check_lib2
-
-set(NETDB_TEST 0)
-check_type(addrinfo "<netdb.h>" "struct addrinfo" NETDB_TEST)
-# Note: example of how to call check_type; however, configure doesn't return a variable, it runs enable_safe if OK
-
-set(SA_LEN_TEST 0)
-check_struct(sa_len "<sys/types.h>;<sys/socket.h>" "struct sockaddr" sa_len SA_LEN_TEST)
-# Note: example of how to call check_struct; however, configure doesn't directly set a variable but uses in conditions
-
-set(RDTSC_TEST 0)
-check_builtin(rdtsc "<intrin.h>" "__rdtsc()" RDTSC_TEST)
-
-set(HAVE_LOCALTIME_R 0)
-check_builtin(time_r "<time.h>" "time_t *time\; struct tm *tm\; localtime_r(time, tm)" HAVE_LOCALTIME_R)
-# Note: example of how to call check_builtin; however, configure uses results to conditionally enable features
-
-#[[
-set(extern_prefix \"\")
-set(extern_asm "")
 set(build_suffix \"\")
+# Note: I can't find anywhere this is defined
+
 set(SLIBSUF \"${CMAKE_SHARED_LIBRARY_SUFFIX}\")
-set(sws_max_filter_size 256)	# I was originally against hardcoding, but line 3055 of configure hardcodes '256'
 
-# Test for restrict command
-# To Do - if ffmpeg needs this, add a compiler flag such as -std=c99 to the build environment
-if (c_restrict IN_LIST CMAKE_C_COMPILE_FEATURES)
-	set(_RESTRICT restrict)
+set(sws_max_filter_size 256)
+# See line 3055 where 256 is hardcoded as the default
+
+# Check the restrict keyword and assign accordingly
+set(_RESTRICT)
+check_cc(restrict "void foo(char * restrict p);" restrict)
+check_cc(__restrict__ "void foo(char * __restrict__ p);" __restrict__)
+check_cc(__restrict "void foo(char * __restrict p);" __restrict)
+if (restrict)
+	set(_RESTRICT "restrict")
+elseif (__restrict__)
+	set(_RESTRICT "__restrict__")
+elseif (__restrict)
+	set(_RESTRICT "__restrict")
 else()
-	set(_RESTRICT "")
+	message(STATUS "restrict keyword not found!")
+endif()
+if (NOT _RESTRICT STREQUAL "restrict")
+	check_cc(restrict_cflags "__declspec(${_RESTRICT}) void* foo(int);" stdlib_cflag)
+	if (stdlib_cflag)
+		# This is where we would, using an as-yet unimplemented function: "add_cflags -FIstdlib.h"
+	endif()
 endif()
 
-# Test for FAST_UNALIGNED
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*|ARM64.*|arm64.*|aarch64.*")
-	set(FAST_UNALIGNED 1)
-	set(ALIGNED_STACK 1)
-else()
-	set(FAST_UNALIGNED 0)
-	set(ALIGNED_STACK 0)
-endif()
+# Get the compiler ident string in the same format as ffmpeg's configure script--retaining only the first line
+execute_process(
+    COMMAND cc "--version"
+    OUTPUT_VARIABLE CC_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+string(REGEX REPLACE "\n.*" "" CC_IDENT "${CC_VERSION}")
+set(CC_IDENT \"${CC_IDENT}\")
 
-# Set the appropriate CPU variables
+# Deal with common ARCH aliases (from lines 4027-4072 of ffmpeg's configure script)
+# We should probably just use the CMAKE_SYSTEM_PROCESSOR variable and apply any conditions in configure
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*")
-	set(ARCH_AARCH64 1)
-	set(HAVE_FAST_64BIT 1)
+	set(ARCH "aarch64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm.*|iPad.*|iPhone.*")
+	set(ARCH "arm")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "mips.*|IP.*")
+	# To Do: configure script at lines 4038-4043 conditionally sets additional CPPFLAGS and LDFLAGS
+	set(ARCH "mips")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "parisc.*|hppa.*")
+	set(ARCH "parisc")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "\"Power Macintosh\".*|ppc.*|powerpc.*")
+	set(ARCH "ppc")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "s390.*|s390x.*")
+	set(ARCH "s390")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "sh4.*|sh.*")
+	set(ARCH "sh4")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "sun4u.*|sparc.*")
+	set(ARCH "sparc")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "tilegx.*|tile-gx.*")
+	set(ARCH "tilegx")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "i386.*|i486.*|i586.*|i686.*|i86pc.*|BePC.*|x86pc.*|x86_64.*|X86_64.*|x86_32.*|amd64.*|AMD64.*|x86.*")
+	set(ARCH "x86")
 else()
-	set(ARCH_AARCH64 0)
+	message(WARNING "unknown architecture ${CMAKE_SYSTEM_PROCESSOR}")
 endif()
-# Note - skipping Alpha
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm.*")
-	set(ARCH_ARM 1)
-else()
-	set(ARCH_ARM 0)
+message("SYSTEM PROCESSOR FOUND: ${CMAKE_SYSTEM_PROCESSOR}. Assigning to arch alias ${ARCH}.")
+
+# To Do: lines 3450-3454 set .exe as the exesuf on Windows. However, since I'm using a cmake variable for this, it may be fine...
+
+# Get the CPU name--and fallback to "generic" per line 3034 of ffmpeg's configure script
+check_native(CPU_NAME)
+if (CPU_NAME STREQUAL "")
+	set(CPU_NAME "generic")
 endif()
-# Note - skipping Ardueno and other exotic CPU types, plus really old ones like m68k "classic" Macintosh chips
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "mips.*")
-	set(ARCH_MIPS 1)
-else()
-	set(ARCH_MIPS 0)
-endif()
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "mips64.*")
-	set(ARCH_MIPS64 1)
-else()
-	set(ARCH_MIPS64 0)
-endif()
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*")
-	set(ARCH_X86_64 1)
-	set(HAVE_FAST_64BIT 1)
-	set(HAVE_FAST_CMOV 1)
-else()
-	set(ARCH_X86_64 0)
-endif()
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86.*|i686.*|i386.*")
-	set(ARCH_X86 1)
-	set(HAVE_FAST_CMOV 1)
-else()
-	set(ARCH_X86 0)
+message(STATUS "Setting CPU: ${CPU_NAME}")
+
+# To Do: lines 4074-4084 conditionally add cpuflags for march and mcpu for armv.* CPUs
+# Need to store cpuflags, cflags, asflags, and ldflags in variables and add as appropriate
+
+# Get the SUBARCH if on arm and CPU_NAME is set to "generic"--see line 4092 of ffmpeg's configure script
+if (${ARCH} STREQUAL "arm" AND ${CPU_NAME} STREQUAL "generic")
+	probe_arm_arch(SUBARCH)
 endif()
 
-# Start of some relevant 'HAVE_' tests
-
-# The following 15-line function was written by Copilot (AI)
-function(test_arm_support FLAG INSTRUCTION RESULT_VAR)
-	# Save original CMAKE_REQUIRED_FLAGS
-	set(_OLD_FLAGS "${CMAKE_REQUIRED_FLAGS}")
-	# Add test flag
-	set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} ${FLAG}")
-	# Try compiling a small snippet that uses the instruction
-	check_c_source_compiles("
-		int main(void) {
-			__asm__ volatile(\"${INSTRUCTION}\");
-			return 0;
-		}
-	" ${RESULT_VAR})
-	# Restore original flags
-	set(CMAKE_REQUIRED_FLAGS "${__OLD_FLAGS}")
-endfunction()
-
-# Modified test for x86 and other features, inspired by the above Copilot (AI) function
-function(test_compiler_support FLAG TEST_CODE RESULT_VAR)
-	# Save original CMAKE_REQUIRED_FLAGS
-	set(_OLD_FLAGS "${CMAKE_REQUIRED_FLAGS}")
-	# Add test flag
-	set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} ${FLAG}")
-	# Try compiling a small snippet that uses the instruction
-	check_c_source_compiles("${TEST_CODE}" "${RESULT_VAR}")
-	# Restore original flags
-	set(CMAKE_REQUIRED_FLAGS "${__OLD_FLAGS}")
-endfunction()
-
-assign_value(HAVE_FAST_64BIT)
-assign_value(HAVE_FAST_CMOV)
-
-# The following tests, which use Copilot's function, are taken straight from ffmpeg-3.0.2's configure script
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm.*")
-	test_arm_support("-mfpu=neon" "vadd.i16 q0, q0, q0" HAVE_NEON)
-	test_arm_support("-mfpu=armv6" "sadd16 r0, r0, r0" HAVE_ARMV6)
-	test_arm_support("-mfpu=armv6t2" "movt r0, #0" HAVE_ARMV6T2)
-	test_arm_support("-mfpu=vfp" "fadds s0, s0, s0" HAVE_VFP)
-	test_arm_support("-mfpu=vfp" "vmov.f32 s0, #1.0" HAVE_VFPV3)
-	test_arm_support("-mfpu=setend" "setend be" HAVE_SETEND)
-endif()
-# Note - we only want to run the above tests on Arm; but we still want to assign a "1" or "0" value in config.h
-assign_value(HAVE_NEON)
-assign_value(HAVE_ARMV6)
-assign_value(HAVE_ARMV6T2)
-assign_value(HAVE_VFP)
-assign_value(HAVE_VFPV3)
-assign_value(HAVE_SETEND)
-
-# The following are all PPC features--since we're not building PPSSPP on Big Endian, so we can hardcode these to "0"
-#define HAVE_ALTIVEC 0
-#define HAVE_DCBZL 0
-#define HAVE_LDBRX 0
-#define HAVE_POWER8 0
-#define HAVE_PPC4XX 0
-#define HAVE_VSX 0
-
-# x86(_64) specific features - compiler test code suggested by Copilot AI
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*" AND ENABLE_OPTIMIZATIONS)
-	# Instead of actually testing for the following CPU features, turn them on since that's what ffmpeg's configure
-	# script apparently does, even non-Intel compatible, discontinued features like FMA4 and XOP, because they get
-	# set to 'true' on my Intel Xeon build system even though it lacks support for either of them or AMD3DNOWEXT
-	set(HAVE_AESNI 1)
-	set(HAVE_AMD3DNOW 1)
-	set(HAVE_AMD3DNOWEXT 1)
-	set(HAVE_AVX 1)
-	set(HAVE_AVX2 1)
-	set(HAVE_FMA3 1)
-	set(HAVE_FMA4 1)
-	set(HAVE_MMX 1)
-	set(HAVE_MMXEXT 1)
-	set(HAVE_SSE 1)
-	set(HAVE_SSE2 1)
-	set(HAVE_SSE3 1)
-	set(HAVE_SSE4 1)
-	set(HAVE_SSE42 1)
-	set(HAVE_SSSE3 1)
-	set(HAVE_XOP 1)
-	set(HAVE_CPUNOP 1)
+# Set the SUBARCH if on arm and CPU_NAME contains the substring "armv"--see line 4127 of ffmpeg's configure script
+if (${ARCH} STREQUAL "arm" AND ${CPU_NAME} MATCHES "armv")
+	string(TOLOWER "${CPU_NAME}" CPU_LOWERCASE)
+	string(REGEX REPLACE "[^a-z0-9]" "" SUBARCH "${CPU_LOWERCASE}")
+elseif (${ARCH} STREQUAL "arm")
+	if (${CPU_NAME} MATCHES "cortex-a")
+		set(SUBARCH "armv7a")
+	elseif (${CPU_NAME} MATCHES "cortex-r")
+		set(SUBARCH "armv7r")
+	elseif (${CPU_NAME} MATCHES "cortex-m")
+		set(SUBARCH "armv7m")
+		# At line 4134, configure ALSO enables 'thumb'
+	elseif (${CPU_NAME} MATCHES "arm11")
+		set(SUBARCH "armv6")
+	elseif (${CPU_NAME} MATCHES "arm[79]*e*|arm9[24]6*|arm96*|arm102[26]")
+		set(SUBARCH "armv5te")
+	elseif (${CPU_NAME} MATCHES "armv4*|arm7*|arm9[24]*")
+		set(SUBARCH "armv4")
+	else()
+		probe_arm_arch(SUBARCH)
+	endif()
+	# Set some options based on the arm SUBARCH--see line 4143 in ffmpeg's configure script
+	if (${SUBARCH} MATCHES "armv5t*")
+		set(HAVE_FAST_CLZ 1)
+	elseif (${SUBARCH} MATCHES "armv[6-8]*")
+		set(HAVE_FAST_CLZ 1)
+		set(HAVE_FAST_UNALIGNED 1)
+	endif()
 endif()
 
-# Note - we only want to run the above tests on x86(_64); but we still want to assign a "1" or "0" value in config.h
-assign_value(HAVE_AESNI)
-assign_value(HAVE_AMD3DNOW)
-assign_value(HAVE_AMD3DNOWEXT)
-assign_value(HAVE_AVX)
-assign_value(HAVE_AVX2)
-assign_value(HAVE_FMA3)
-assign_value(HAVE_FMA4)
-assign_value(HAVE_MMX)
-assign_value(HAVE_MMXEXT)
-assign_value(HAVE_SSE)
-assign_value(HAVE_SSE2)
-assign_value(HAVE_SSE3)
-assign_value(HAVE_SSE4)
-assign_value(HAVE_SSE42)
-assign_value(HAVE_SSSE3)
-assign_value(HAVE_XOP)
-assign_value(HAVE_CPUNOP)
+# Note: skipping avr32 and bfin cpu-specific checks at lines 4151-4174 of ffmpeg's configure script
 
-# MIPS specific features - compiler tests suggested by Copilot AI (only the last 4 actually do anything meaningful)
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "mips.*|mips64.*")
-	test_compiler_support("-mfpu=fp64" "int main(void){return 0;}" HAVE_MIPSFPU)
-	test_compiler_support("-march=mips32r2" "int main(void){return 0;}" HAVE_MIPS32R2)
-	test_compiler_support("-march=mips32r5" "int main(void){return 0;}" HAVE_MIPS32R5)
-	test_compiler_support("-march=mips64r2" "int main(void){return 0;}" HAVE_MIPS64R2)
-	test_compiler_support("-march=mips32r6" "int main(void){return 0;}" HAVE_MIPS32R6)
-	test_compiler_support("-march=mips64r6" "int main(void){return 0;}" HAVE_MIPS64R6)
-	test_compiler_support("-mdsp" "int main(void){return 0;}" HAVE_MIPSDSP)
-	test_compiler_support("-mdspr2" "int main(void){return 0;}" HAVE_MIPSDSPR2)
-	test_compiler_support("" "#include <msa.h>\nint main(void){v16i8 a = __builtin_msa_fill_b(1);return 0;}" HAVE_MSA)
-	test_compiler_support("" "#include <loongson2.h>\nint main(void){__m64 x = __builtin_loongson_paddb(0, 0);return 0;}" HAVE_LOONGSON2)
-	test_compiler_support("" "#include <loongson3a.h>\nint main(void){__m128i x = __builtin_loongson_vaddb(0, 0);return 0;}" HAVE_LOONGSON3)
-	test_compiler_support("" "#include <mmi.h>\nint main(void){__mmi_d v = {0};return 0;}" HAVE_MMI)
-endif()
-# Note - we only want to run the above tests on mips; but we still want to assign a "1" or "0" value in config.h
-assign_value(HAVE_MIPSFPU)
-assign_value(HAVE_MIPS32R2)
-assign_value(HAVE_MIPS32R5)
-assign_value(HAVE_MIPS64R2)
-assign_value(HAVE_MIPS32R6)
-assign_value(HAVE_MIPS64R6)
-assign_value(HAVE_MIPSDSP)
-assign_value(HAVE_MIPSDSPR2)
-assign_value(HAVE_MSA)
-assign_value(HAVE_LOONGSON2)
-assign_value(HAVE_LOONGSON3)
-assign_value(HAVE_MMI)
-
-# alignment checks--function written by Copilot AI
-# Function to check alignment support for GCC/Clang and MSVC
-function(check_alignment ALIGNMENT VAR_NAME)
-    set(SOURCE_CODE "
-        #include <stdio.h>
-        #include <stdint.h>
-
-        #if defined(_MSC_VER)
-            __declspec(align(${ALIGNMENT})) struct AlignedStruct {
-                char c;
-            };
-        #else
-            struct __attribute__((aligned(${ALIGNMENT}))) AlignedStruct {
-                char c;
-            };
-        #endif
-
-        int main(void) {
-            struct AlignedStruct s;
-            // Ensure alignment is applied (compile-time check)
-            if (((uintptr_t)&s) % ${ALIGNMENT} != 0) return 1;
-            return 0;
-        }
-    ")
-    check_c_source_compiles("${SOURCE_CODE}" ${VAR_NAME})
-endfunction()
-
-# Check for 8, 16, and 32-byte alignment
-check_alignment(8  HAVE_LOCAL_ALIGNED_8)
-check_alignment(16 HAVE_LOCAL_ALIGNED_16)
-check_alignment(32 HAVE_LOCAL_ALIGNED_32)
-
-# check for simd_align_16 the same was as ffmpeg's configure does
-if(HAVE_NEON OR HAVE_SSE)
-	set(HAVE_SIMD_ALIGN_16 1)
-else()
-	set(HAVE_SIMD_ALIGN_16 0)
+# MIPS--see line 4176 of ffmpeg's configure script
+if (${ARCH} STREQUAL "arm")
+	if (NOT ${CPU_NAME} STREQUAL "generic")
+		set(HAVE_MIPS32R2 0)
+		set(HAVE_MIPS32R5 0)
+        set(HAVE_MIPS64R2 0)
+        set(HAVE_MIPS32R6 0)
+        set(HAVE_MIPS64R6 0)
+        set(HAVE_LOONGSON2 0)
+        set(HAVE_LOONGSON3 0)
+	endif()
+	if (${CPU_NAME} MATCHES "24kc|24kf*|24kec|34kc|1004kc|24kef*|34kf*|1004kf*|74kc|74kf")
+		set(HAVE_MIPS32R2 1)
+		set(HAVE_MSA 0)
+		# Jump down to line 4232 in ffmpeg's configure script
+		if (${CPU_NAME} MATCHES "24kc")
+			set(HAVE_MIPSFPU 0)
+			set(HAVE_MIPSDSP 0)
+			set(HAVE_MIPSDSPR2 0)
+		elseif (${CPU_NAME} MATCHES "24kf*")
+			set(HAVE_MIPSDSP 0)
+			set(HAVE_MIPSDSPR2 0)
+		elseif (${CPU_NAME} MATCHES "24kec|34kc|1004kc")
+			set(HAVE_MIPSFPU 0)
+			set(HAVE_MIPSDSPR2 0)
+		elseif (${CPU_NAME} MATCHES "74kc")
+			set(HAVE_MIPSFPU 0)
+		endif()
+	elseif (${CPU_NAME} MATCHES "p5600|i6400")
+		set(HAVE_MIPSDSP 0)
+		set(HAVE_MIPSDSPR2 0)
+		# Jump down to line 4251 in ffmpeg's configure script)
+		if (${CPU_NAME} MATCHES "p5600")
+			set(HAVE_MIPS32R5 1)
+			# To Do: add appropriate cpuflags
+		elseif (${CPU_NAME} MATCHES "i6400")
+			set(HAVE_MIPS64R6 1)
+			# To Do: add appropriate cpuflags
+		endif()
+	elseif (${CPU_NAME} MATCHES "loongson*")
+		set(HAVE_LOONGSON2 1)
+		set(HAVE_LOONGSON3 1)
+		set(HAVE_LOCAL_ALIGNED_8 1)
+		set(HAVE_LOCAL_ALIGNED_16 1)
+		set(HAVE_LOCAL_ALIGNED_32 1)
+		set(HAVE_SIMD_ALIGN_16 1)
+		set(HAVE_FAST_64BIT 1)
+		set(HAVE_FAST_CLZ 1)
+		set(HAVE_FAST_CMOV 1)
+		set(HAVE_FAST_UNALIGNED 1)
+		set(HAVE_ALIGNED_STACK 0)
+		# To Do - deal with cpuflags at lines 4208-4216 of configure script
+	else()
+		message(WARNING "Unknown CPU. Disabling all MIPS optimizations")
+		set(HAVE_MIPSFPU 0)
+		set(HAVE_MIPSDSP 0)
+		set(HAVE_MIPSDSPR2 0)
+		set(HAVE_MSA 0)
+		set(HAVE_MMI 0)
+	endif()
 endif()
 
-# tests for symver_asm_label and gnu_asm suggested by Gemini AI
-test_compiler_support("-fPIC" "void foo(void){}\n__asm__(\".symver foo, foo@VERS_1.1\");\nint main(void){return 0;}" HAVE_SYMVER_ASM_LABEL)
-test_compiler_support("" "void foo(void){}\n__asm__(\".symver foo, foo@@VERS_1.0\");\nint main(void){return 0;}" HAVE_GNU_ASM)
-if(HAVE_SYMVER_ASM_LABEL OR HAVE_GNU_ASM)
-	set(HAVE_SYMVER 1)
-else()
-	set(HAVE_SYMVER 0)
+# Skipping PPC at lines 4265-4324, since PPSSPP is little endian only
+# To Do: should probably revisit this section as little endian PPC exists
+
+# To Do: revisit lines 4326-4335, re SPARC; skipped for now since we're not adding cpuflags yet
+
+# x86 - starting at line 4337 of ffmpeg's configure script
+if (${ARCH} STREQUAL "x86")
+	if (${CPU_NAME} MATCHES "i[345]86|pentium")
+		set(HAVE_I686 0)
+		set(HAVE_MMX 0)
+		# To Do - set appropriate cpuflags
+	elseif (${CPU_NAME} MATCHES "pentium-mmx|k6|k6-[23]|winchip-c6|winchip2|c3")
+		set(HAVE_I686 0)
+	elseif (${CPU_NAME} MATCHES "i686|pentiumpro|pentium[23]|pentium-m|athlon|athlon-tbird|athlon-4|athlon-[mx]p|athlon64*|k8*|opteron*|athlon-fx|core*|atom|bonnell|nehalem|westmere|silvermont|sandybridge|ivybridge|haswell|broadwell|amdfam10|barcelona|b[dt]ver*")
+		set(HAVE_I686 1)
+		set(HAVE_FAST_CMOV 1)
+	elseif (${CPU_NAME} MATCHES "pentium4|pentium4m|prescott|nocona")
+		set(HAVE_I686 1)
+		set(HAVE_FAST_CMOV 0)
+	endif()
 endif()
 
-# More tests--these came from ffmpeg's configure script EXCEPT missing header info for atomic_compare_exchange & sync_val_compare_and_swap which came from Google
-check_symbol_exists(atomic_cas_ptr "atomic.h" HAVE_ATOMIC_CAS_PTR)
-check_symbol_exists(atomic_compare_exchange_strong "stdatomic.h" HAVE_ATOMIC_COMPARE_EXCHANGE)
-check_symbol_exists(__machine_rw_barrier "mbarrier.h" HAVE_MACHINE_RW_BARRIER)
-check_symbol_exists(MemoryBarrier "windows.h" HAVE_MEMORYBARRIER)
-check_symbol_exists(SA_RESTART "signal.h" HAVE_SARESTART)
-check_symbol_exists(gmtime_r "time.h" HAVE_GMTIME_R)
-check_symbol_exists(localtime_r "time.h" HAVE_LOCALTIME_R)
-check_symbol_exists(__rdtsc "intrin.h" HAVE_RDTSC)
-check_symbol_exists(_mm_empty "mmintrin.h" HAVE_MM_EMPTY)
-# The following is unreliable with check_symbol_exists, so we have to attempt to compile a code snippet
-test_compiler_support("" "#include <stdint.h>\nint main(){volatile int val = 0;\n__sync_val_compare_and_swap(&val, 0, 1);\n;return 0;}" HAVE_SYNC_VAL_COMPARE_AND_SWAP)
+# To do: lines 4367-4371, adding cflags, asflags, and ldflags based on added cpuflags
 
-assign_value(HAVE_ATOMIC_CAS_PTR)
-assign_value(HAVE_ATOMIC_COMPARE_EXCHANGE)
-assign_value(HAVE_MACHINE_RW_BARRIER)
-assign_value(HAVE_MEMORYBARRIER)
-assign_value(HAVE_MM_EMPTY)
-assign_value(HAVE_RDTSC)
-assign_value(HAVE_SARESTART)
-assign_value(HAVE_SYNC_VAL_COMPARE_AND_SWAP)
-# Conditionals to apply the above tests' results per ffmpeg's configure conditionals under # threading support
-if(HAVE_SYNC_VAL_COMPARE_AND_SWAP OR HAVE_ATOMIC_COMPARE_EXCHANGE)
-	set(HAVE_ATOMICS_GCC 1)
-else()
-	set(HAVE_ATOMIC_GCC 0)
-endif()
-if(HAVE_ATOMIC_CAS_PTR OR HAVE_MACHINE_RW_BARRIER)
-	set(HAVE_ATOMICS_SUNCC 1)
-else()
-	set(HAVE_ATOMICS_SUNCC 0)
-endif()
-if(HAVE_MEMORYBARRIER)
-	set(HAVE_ATOMICS_WIN32 1)
-else()
-	set(HAVE_ATOMICS_WIN32 0)
-endif()
-if(HAVE_ATOMICS_GCC OR HAVE_ATOMICS_SUNCC OR HAVE_ATOMICS_WIN32)
-	set(HAVE_ATOMICS_NATIVE 1)
-else()
-	set(HAVE_ATOMICS_NATIVE 0)
+# To do: go back and look for more 'enable' and 'disable' lines and assign as appropriate to HAVE_ variables
+
+# Skipping the 2 checks at lines 4389 and 4392 as CPPFLAGS are N/A with cmake. If we need CPPFLAGS, however, we can probably just add these to CFLAGS...
+
+# 64 vs 32-bit subarch checks at lines 4409-4447 of ffmpeg's configure script
+if (${ARCH} MATCHES "aarch64|alpha|ia64")
+	# To do: add spic flag
+elseif (${ARCH} MATCHES "mips")
+	check_64bit(mips mips64 "_MIPS_SIM > 1" MIPS_SUBARCH)
+	if (${MIPS_SUBARCH} STREQUAL "mips64")
+		set(ARCH_MIPS64 1)
+	endif()
+	# To do: add ppc, s390, and sparc conditionals (lines 4421-4432)
+elseif (${ARCH} MATCHES "x86")
+	check_64bit(x86_32 x86_64 "sizeof(void *) > 4" X86_SUBARCH)
+	if (${X86_SUBARCH} STREQUAL "x86_64")
+		set(ARCH_X86_64 1)
+	else()
+		set(ARCH_X86_32 1)
+	endif()
 endif()
 
-# Function checks - cabs and cexp
-check_function_exists(cabs HAVE_CABS)
-check_function_exists(cexp HAVE_CEXP)
-assign_value(HAVE_CABS)
-assign_value(HAVE_CEXP)
+# To Do: review lines 4452-4704 for OS-specific flags
 
-test_compiler_support("" "int main(void){int x = 0;\nasm(\"nop\");\nreturn x;}" HAVE_INLINE_ASM)
-assign_value(HAVE_INLINE_ASM)
+# To Do: review lines 4728-4841 for probe_libc function
 
-# find_program(YASM_EXECUTABLE yasm) was already set in CMakeLists.txt so we can use those results here
-if(YASM_EXECUTABLE)	
-	set(HAVE_YASM 1)
-else()
-	set(HAVE_YASM 0)
+# Check for PIC - see line 4845 of ffmpeg's configure script
+set(CONFIG_PIC 0)
+check_cpp_condition(pic "stdlib.h" "defined(__PIC__) || defined(__pic__) || defined(PIC)" CONFIG_PIC)
+# FIXME: ffmpeg's configure script gets passing test results on my system--yet this check fails; but it's clearly not defined in stdlib.h so I don't know how it passed with configure!
+# To Do: per lines 4900-4912, add appropriate cflags and asflags (cppflags?) if PIC is enabled
+
+set(HAVE_INLINE_ASM 0)
+check_cc(inline_asm "void foo(void) { __asm__ volatile (\"\" ::); }" HAVE_INLINE_ASM)
+
+# Line 4933
+set(HAVE_PRAGMA_DEPRECATED 0)
+check_cc(pragma_deprecated "void foo(void) { _Pragma(\"GCC diagnostic ignored \"-Wdeprecated-declarations\"\") }" HAVE_PRAGMA_DEPRECATED)
+# FIXME: ffmpeg's configure script gets passing test results on my system--yet this check fails
+
+set(HAVE_ATTRIBUTE_PACKED 0)
+check_cc(attribute_packed "struct { int x; } __attribute__((packed)) x;" HAVE_ATTRIBUTE_PACKED)
+
+set(HAVE_ATTRIBUTE_MAY_ALIAS 0)
+check_cc(attribute_may_alias "union { int x; } __attribute__((may_alias)) x;" HAVE_ATTRIBUTE_MAY_ALIAS)
+
+# Skipping endian test at lines 4945-4952 since PPSSPP is little endian only
+
+# To Do: rewrite check_gas() function starting at line 4954 of ffmpeg's configure script
+
+# Inline ASM labels
+set(HAVE_INLINE_ASM_LABELS 0)
+check_inline_asm(inline_asm_labels "\"1:\\n\"" HAVE_INLINE_ASM_LABELS)
+set(HAVE_INLINE_ASM_NONLOCAL_LABELS 0)
+check_inline_asm(inline_asm_nonlocal_labels "\"Label:\\n\"" HAVE_INLINE_ASM_NONLOCAL_LABELS)
+
+
+
+if (${ARCH} STREQUAL "aarch64")
+	# To Do: fix check_insn() function, implement the checks at lines 5005-5011
+elseif (${ARCH} STREQUAL "arm")
+	if (MSVC) # Fixme: need to detect whether compiler is MSVC
+		check_cpp_condition(thumb1 "stddef.h" "defined _M_ARMT" CONFIG_THUMB)
+	endif()
+	check_cpp_condition(thumb_defined "stddef.h" "defined __thumb__" THUMB_DEFINED)
+	if (THUMB_DEFINED)
+		check_cc(thumb "float func(float a, float b){ return a+b; }" CONFIG_THUMB)
+	endif()
+	# To Do: line 5025 - check cflags and set appropriately if CONFIG_THUMB is true
+	check_cpp_condition(vfp_args1 "stddef.h" "defined __ARM_PCS_VFP" HAVE_VFP_ARGS)
+	if (NOT HAVE_VFP_ARGS)
+		check_cpp_condition(vfp_args2 "stddef.h" "defined _M_ARM_FP && _M_ARM_FP >= 30" HAVE_VFP_ARGS)
+	endif()
+	# To do: a second if (NOT HAVE_VFP_ARGS), lines 5031-5037, with multiple chained checks
 endif()
 
-# Check for presence of various headers on system--list taken from ffmpeg's configure
-foreach(header alsa_asoundlib_h altivec_h arpa_inet_h asm_types_h cdio_paranoia_h cdio_paranoia_paranoia_h dev_bktr_ioctl_bt848_h dev_bktr_ioctl_meteor_h dev_ic_bt8xx_h dev_video_bktr_ioctl_bt848_h dev_video_meteor_ioctl_meteor_h direct_h dirent_h dlfcn_h d3d11_h dxva_h ES2_gl_h gsm_h io_h mach_mach_time_h machine_ioctl_bt848_h machine_ioctl_meteor_h malloc_h opencv2_core_core_c_h openjpeg_2_1_openjpeg_h openjpeg_2_0_openjpeg_h openjpeg_1_5_openjpeg_h OpenGL_gl3_h poll_h sndio_h soundcard_h sys_mman_h sys_param_h sys_resource_h sys_select_h sys_soundcard_h sys_time_h sys_un_h sys_videoio_h termios_h udplite_h unistd_h valgrind_valgrind_h windows_h winsock2_h)
-	# convert header item to proper header format
-	string(REGEX REPLACE "_h" ".h" header_formatted ${header})
-    # Create a RESULT_VAR, properly formatted
-    string(TOUPPER "${header}" uppercase_header)
-    set(RESULT_VAR "HAVE_${uppercase_header}")
-    # Look for the header
-    check_include_file(${header_formatted} ${RESULT_VAR})
-    assign_value(${RESULT_VAR} PARENT_SCOPE) # Fix this: works fine if 'true', does nothing if 'false'
-endforeach()
-
-# Combined ffmpeg's configure math_func and system_funcs lists here since the check is the same
-# Note: I removed gmtime_r & localtime_r from this list as they were already tested for above
-foreach(math_func atanf atan2f cbrt cbrtf copysign cosf erf exp2 exp2f expf hypot isfinite isinf isnan ldexpf llrint llrintf log2 log2f log10f lrint lrintf powf rint round roundf sinf trunc truncf)
-    # Create a RESULT_VAR, properly formatted
-    string(TOUPPER "${math_func}" uppercase_math_func)
-    set(RESULT_VAR "HAVE_${uppercase_math_func}")
-    # Check whether the math type is defined
-	check_type_size(${math_func} ${RESULT_VAR})
-    assign_value(${RESULT_VAR} PARENT_SCOPE)
-endforeach()
-
-# To Do - don't copy and paste this function--it's sloppy coding.
-foreach(system_func access aligned_malloc arc4random clock_gettime closesocket CommandLineToArgvW CoTaskMemFree CryptGenRandom dlopen fcntl flt_lim fork getaddrinfo gethrtime getopt GetProcessAffinityMask GetProcessMemoryInfo GetProcessTimes getrusage GetSystemTimeAsFileTime gettimeofday glob glXGetProcAddress inet_aton isatty jack_port_get_latency_range kbhit lstat lzo1x_999_compress mach_absolute_time MapViewOfFile memalign mkstemp mmap mprotect nanosleep PeekNamedPipe posix_memalign pthread_cancel sched_getaffinity SetConsoleTextAttribute SetConsoleCtrlHandler setmode setrlimit Sleep strerror_r sysconf sysctl usleep UTGetOSTypeFromString VirtualAlloc wglGetProcAddress)
-    # Create a RESULT_VAR, properly formatted
-    string(TOUPPER "${system_func}" uppercase_system_func)
-    set(RESULT_VAR "HAVE_${uppercase_system_func}")
-    # Check whether the system function is defined
-    check_function_exists(${system_func} ${RESULT_VAR})
-    assign_value(${RESULT_VAR} PARENT_SCOPE)
-endforeach()
-
-# Determine the type of Threads
-if(CMAKE_USE_WIN32_THREADS_INIT)
-	set(HAVE_W32THREADS 1)
-else()
-	set(HAVE_W32THREADS 0)
-endif()
-if(CMAKE_USE_PTHREADS_INIT)
-	set(HAVE_PTHREADS 1)
-else()
-	set(HAVE_PTHREADS 0)
-endif()
-if(CMAKE_USE_OS2_THREADS_INIT)
-	set(HAVE_OS2THREADS 1)
-else()
-	set(HAVE_OS2THREADS 0)
-endif()
-
-if(HAVE_PTHREADS OR HAVE_OS2THREADS OR HAVE_W32THREADS)
-	set(HAVE_THREADS 1)
-else()
-	set(HAVE_THREADS 0)
-endif()
-
-# Toolchain features - Copilot suggested these test programs
-test_compiler_support("" "int main(void){__asm__(\".dn 0, 0\");\n;return 0;}" HAVE_AS_DN_DIRECTIVE)
-test_compiler_support("" "int main(void){__asm__(\".func myfunc\");\n;return 0;}" HAVE_AS_FUNC)
-test_compiler_support("" "int main(void){__asm__(\".object_arch armv8-a\");\nreturn 0;}" HAVE_AS_OBJECT_ARCH)
-test_compiler_support("" "int main(void){__asm__(\".mod.q\");\n;return 0;}" HAVE_ASM_MOD_Q)
-test_compiler_support("" "struct __attribute__((may_alias)) A { int x; };\nint main() { struct A a; a.x = 1;\nreturn 0;}" HAVE_ATTRIBUTE_MAY_ALIAS)
-test_compiler_support("" "struct __attribute__((packed)) B { char c; int i; };\nint main() { struct B b; b.c = 0; b.i = 1; return 0; }" HAVE_ATTRIBUTE_PACKED)
-test_compiler_support("" "int main() {\nregister int r __asm__(\"ebp\");\nr = 0;\nreturn r; }" HAVE_EBP_AVAILABLE)
-test_compiler_support("" "int main() {\nregister int r __asm__(\"ebx\");\nr = 0;\nreturn r; }" HAVE_EBX_AVAILABLE)
-test_compiler_support("" "__asm__(\".section .text\");\nint main() { return 0; }" HAVE_GNU_AS)
-test_compiler_support("" "__asm__(\".using mydata,12\");\nint main() { return 0; }" HAVE_IBM_ASM)
-test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\".globl mylabel\\nmylabel:\");\nreturn 0;}" HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS)
-#test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\"jmp 1f\\n1:\\n\");\nreturn 0;}" HAVE_INLINE_ASM_LABELS)
-test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\"jmp global_label\\n.global global_label\\nglobal_label:\");\nreturn 0;}" HAVE_INLINE_ASM_NONLOCAL_LABELS)
-test_compiler_support("" "#include <stdio.h>\nint main(void){#pragma deprecated\nint x = 0;\nreturn 0;}" HAVE_PRAGMA_DEPRECATED)
-test_compiler_support("" "#include <stdio.h>\nint main(void){#ifndef RSYNC_CONTIMEOUT\n#define RSYNC_CONTIMEOUT 30\n#endif\nreturn 0;}" HAVE_RSYNC_CONTIMEOUT)
-test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\".symver myfunc,myfunc@VER_1.0\"); void myfunc(void) {}\nreturn 0;}" HAVE_SYMVER_ASM_LABEL)
-test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\".symver myfunc,myfunc@@VER_1.0\"); void myfunc(void) {}\nreturn 0;}" HAVE_SYMVER_GNU_ASM)
-test_compiler_support("" "#include <stdio.h>\nint main(void){__attribute__((pcs(\"aapcs-vfp\"))) void foo(void) {}\nreturn 0;}" HAVE_VFP_ARGS)
-test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\"add %0, %1, %2\" : \"=r\"( (int){0} ) : \"r\"(1), \"r\"(2));\nreturn 0;}" HAVE_XFORM_ASM)
-test_compiler_support("" "#include <stdio.h>\nint main(void){__asm__(\"pxor %xmm0, %xmm0\" ::: \"xmm0\");\nreturn 0;}" HAVE_XMM_CLOBBERS)
-assign_value(HAVE_AS_DN_DIRECTIVE)
-assign_value(HAVE_AS_FUNC)
-assign_value(HAVE_AS_OBJECT_ARCH)
-assign_value(HAVE_ASM_MOD_Q)
-assign_value(HAVE_ATTRIBUTE_MAY_ALIAS)
-assign_value(HAVE_ATTRIBUTE_PACKED)
-assign_value(HAVE_EBP_AVAILABLE)
-assign_value(HAVE_EBX_AVAILABLE)
-assign_value(HAVE_GNU_AS)
-assign_value(HAVE_IBM_ASM)
-assign_value(HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS)
-assign_value(HAVE_INLINE_ASM_LABELS)
-assign_value(HAVE_INLINE_ASM_NONLOCAL_LABELS)
-assign_value(HAVE_PRAGMA_DEPRECATED)
-assign_value(HAVE_RSYNC_CONTIMEOUT)
-assign_value(HAVE_SYMVER_ASM_LABEL)
-assign_value(HAVE_SYMVER_GNU_ASM)
-assign_value(HAVE_VFP_ARGS)
-assign_value(HAVE_XFORM_ASM)
-assign_value(HAVE_XMM_CLOBBERS)
-
-# Types
-check_type_size("CONDITION_VARIABLE_Ptr" HAVE_CONDITION_VARIABLE_PTR)
-check_type_size("socklen_t" HAVE_SOCKLEN_T)
-check_type_size("struct addrinfo" HAVE_STRUCT_ADDRINFO)
-check_type_size("struct group_source_req" HAVE_STRUCT_GROUP_SOURCE_REQ)
-check_type_size("struct ip_mreq_source" HAVE_STRUCT_IP_MREQ_SOURCE)
-check_type_size("struct ipv6_mreq" HAVE_STRUCT_IPV6_MREQ)
-check_type_size("struct pollfd" HAVE_STRUCT_POLLFD)
-check_type_size("struct sctp_event_subscribe" HAVE_STRUCT_SCTP_EVENT_SUBSCRIBE)
-check_type_size("struct sockaddr_in6" HAVE_STRUCT_SOCKADDR_IN6)
-check_type_size("struct sockaddr_storage" HAVE_STRUCT_SOCKADDR_STORAGE)
-check_type_size("struct v4l2_frmivalenum" HAVE_STRUCT_V4L2_FRMIVALENUM)
-check_struct_has_member("struct rusage" ru_maxrss "sys/resource.h" HAVE_STRUCT_RUSAGE_RU_MAXRSS)
-check_struct_has_member("struct sockaddr" sa_len "sys/socket.h" HAVE_STRUCT_SOCKADDR_SA_LEN)
-check_struct_has_member("struct stat" st_mtim.tv_nsec "sys/stat.h" HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC)
-check_struct_has_member("struct v4l2_frmivalenum" discrete "linux/videodev2.h" HAVE_STRUCT_V4L2_FRMIVALENUM_DISCRETE)
-assign_value(HAVE_CONDITION_VARIABLE_PTR)
-assign_value(HAVE_SOCKLEN_T)
-assign_value(HAVE_STRUCT_ADDRINFO)
-assign_value(HAVE_STRUCT_GROUP_SOURCE_REQ)
-assign_value(HAVE_STRUCT_IP_MREQ_SOURCE)
-assign_value(HAVE_STRUCT_IPV6_MREQ)
-assign_value(HAVE_STRUCT_POLLFD)
-assign_value(HAVE_STRUCT_SCTP_EVENT_SUBSCRIBE)
-assign_value(HAVE_STRUCT_SOCKADDR_IN6)
-assign_value(HAVE_STRUCT_SOCKADDR_STORAGE)
-assign_value(HAVE_STRUCT_V4L2_FRMIVALENUM)
-assign_value(HAVE_STRUCT_RUSAGE_RU_MAXRSS)
-assign_value(HAVE_STRUCT_SOCKADDR_SA_LEN)
-assign_value(HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC)
-assign_value(HAVE_STRUCT_V4L2_FRMIVALENUM_DISCRETE)
-
-# Deal with if(GNU_WINDRES) setting HAVE_GNU_WINDRES to "1")
-if(GNU_WINDRES_FOUND)
-	set(HAVE_GNU_WINDRES 1)
-else()
-	set(HAVE_GNU_WINDRES 0)
-endif()
-
-if(WIN32)
-	set(HAVE_DOS_PATHS 1)
-	check_library_exists(dxva2 DXVA2CreateVideoService "" HAVE_DXVA2_LIB)
-	check_include_file(dxva2api.h HAVE_DXVA2API_COBJ)
-else()
-	set(HAVE_DOS_PATHS 0)
-endif()
-
-if(MSVC)
-	set(HAVE_LIBC_MSVCRT 1)
-else()
-	set(HAVE_LIBC_MSVCRT 0)
-endif()
-
-# We don't need a FireWire camera library, GNU Texinfo tools, perl/pod2man, or SDL, so we'll hardcode all to "0"
-
-test_compiler_support("" "__attribute__((section(\".data.rel.ro\"))) const int x = 42;\nint main() { return x; }" HAVE_SECTION_DATA_REL_RO)
-
-if(WIN32 AND CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
-    set(HAVE_WINRT 1)
-else()
-    set(HAVE_WINRT 0)
-endif()
-
-if(VAAPI_X11_FOUND) # Fix these 2: PkgConfig doesn't give me the variable I want so this returns false even when true
-	set(HAVE_VAAPI_X11 1)
-else()
-	set(HAVE_VAAPI_X11 0)
-endif()
-if(VDPAU_X11_FOUND)
-	set(HAVE_VDPAU_X11 1)
-else()
-	set(HAVE_VDPAU_X11 0)
-endif()
-if(X11_FOUND)
-	set(HAVE_XLIB 1)
-else()
-	set(HAVE_XLIB 0)
-endif()
-
-assign_value(HAVE_DXVA2_LIB)
-assign_value(HAVE_DXVA2API_COBJ)
-assign_value(HAVE_SECTION_DATA_REL_RO)
-
-if(HAVE_DXVA2_LIB OR HAVE_VAAPI_X11 OR HAVE_VDPAU_X11)
-	set(CONFIG_HWACCELS 1)
-else()
-	set(CONFIG_HWACCELS 0)
-endif()
-
-if(ZLIB_FOUND)
-	set(HAVE_ZLIB 1)
-else()
-	set(HAVE_ZLIB 0)
-endif()
-]]
 file(CONFIGURE
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/config.h"
 	CONTENT
@@ -606,10 +315,10 @@ file(CONFIGURE
 #define CONFIG_THIS_YEAR 2016
 #define FFMPEG_DATADIR ${CMAKE_CURRENT_BINARY_DIR}
 #define AVCONV_DATADIR ${CMAKE_CURRENT_BINARY_DIR}
-#define CC_IDENT \"${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}\"
+#define CC_IDENT ${CC_IDENT}
 #define av_restrict ${_RESTRICT}
 #define EXTERN_PREFIX ${extern_prefix}
-#define EXTERN_ASM ${extern_asm}
+#define EXTERN_ASM ${extern_prefix}
 #define BUILDSUF ${build_suffix}
 #define SLIBSUF ${SLIBSUF}
 #define HAVE_MMX2 HAVE_MMXEXT
@@ -669,7 +378,7 @@ file(CONFIGURE
 #define HAVE_SSSE3 ${HAVE_SSSE3}
 #define HAVE_XOP ${HAVE_XOP}
 #define HAVE_CPUNOP ${HAVE_CPUNOP}
-#define HAVE_I686 ${ARCH_X86_64}
+#define HAVE_I686 ${HAVE_I686}
 #define HAVE_MIPSFPU ${HAVE_MIPSFPU}
 #define HAVE_MIPS32R2 ${HAVE_MIPS32R2}
 #define HAVE_MIPS32R5 ${HAVE_MIPS32R5}
@@ -772,7 +481,7 @@ file(CONFIGURE
 #define HAVE_MMI_INLINE ${HAVE_MMI}
 #define HAVE_ALIGNED_STACK ${ALIGNED_STACK}
 #define HAVE_FAST_64BIT ${HAVE_FAST_64BIT}
-#define HAVE_FAST_CLZ 1
+#define HAVE_FAST_CLZ ${HAVE_FAST_CLZ}
 #define HAVE_FAST_CMOV ${HAVE_FAST_CMOV}
 #define HAVE_LOCAL_ALIGNED_8 ${HAVE_LOCAL_ALIGNED_8}
 #define HAVE_LOCAL_ALIGNED_16 ${HAVE_LOCAL_ALIGNED_16}
@@ -795,7 +504,7 @@ file(CONFIGURE
 #define HAVE_SYMVER ${HAVE_SYMVER}
 #define HAVE_YASM ${HAVE_YASM}
 #define HAVE_BIGENDIAN 0
-#define HAVE_FAST_UNALIGNED ${FAST_UNALIGNED}
+#define HAVE_FAST_UNALIGNED ${HAVE_FAST_UNALIGNED}
 #define HAVE_INCOMPATIBLE_LIBAV_ABI 0
 #define HAVE_ALSA_ASOUNDLIB_H ${HAVE_ALSA_ASOUNDLIB_H}
 #define HAVE_ALTIVEC_H ${HAVE_ALTIVEC_H}
@@ -1117,7 +826,7 @@ file(CONFIGURE
 #define CONFIG_VDPAU ${HAVE_VDPAU_X11}
 #define CONFIG_VIDEOTOOLBOX 0
 #define CONFIG_XVMC 1
-#define CONFIG_GPL 1
+#define CONFIG_GPL 0
 #define CONFIG_NONFREE 0
 #define CONFIG_VERSION3 0
 #define CONFIG_AVCODEC 1
@@ -1150,7 +859,7 @@ file(CONFIGURE
 #define CONFIG_MEMALIGN_HACK 0
 #define CONFIG_MEMORY_POISONING 0
 #define CONFIG_NEON_CLOBBER_TEST 0
-#define CONFIG_PIC 1
+#define CONFIG_PIC ${CONFIG_PIC}
 #define CONFIG_POD2MAN 0
 #define CONFIG_RAISE_MAJOR 0
 #define CONFIG_THUMB 0
