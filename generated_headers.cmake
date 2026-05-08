@@ -143,7 +143,7 @@ endif()
 # Note: skipping avr32 and bfin cpu-specific checks at lines 4151-4174 of ffmpeg's configure script
 
 # MIPS--see line 4176 of ffmpeg's configure script
-if (${ARCH} STREQUAL "arm")
+if (${ARCH} STREQUAL "mips")
 	if (NOT ${CPU_NAME} STREQUAL "generic")
 		set(HAVE_MIPS32R2 0)
 		set(HAVE_MIPS32R5 0)
