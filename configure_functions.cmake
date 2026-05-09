@@ -164,9 +164,6 @@ function(check_ld target ARGUMENTS EXTERNAL_LIB RESULT_VAR)
 				if (${MYLIB_${lib_TRIMMED}} MATCHES "-NOTFOUND")
 					message(FATAL_ERROR "Required library ${lib} not found!")
 				endif()
-				message(STATUS "lib is named ${lib}")
-				string(APPEND CMAKE_EXE_LINKER_FLAGS "${lib}") # This doesn't work either
-#				string(APPEND EXTERNAL_LIBS_STRING "${lib}\n") # Doesn't work--it just looks for 1 lib with LBs
 			endforeach()
 		endif()
 	endif()
@@ -176,6 +173,7 @@ function(check_ld target ARGUMENTS EXTERNAL_LIB RESULT_VAR)
 			COMMAND ${CMAKE_C_COMPILER}
 					${CMAKE_C_FLAGS}
 					${CMAKE_EXE_LINKER_FLAGS}
+					${EXTERNAL_LIB}
 					"${OUTPUT_OBJ}"
 					-o "${CONFIG_TESTS_DIR}/${target}.exe"
 			RESULT_VARIABLE result

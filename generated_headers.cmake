@@ -466,23 +466,14 @@ if (HAVE_WINDOWS_H)
 endif()
 check_func_headers(glob "<glob.h>" "glob" "" HAVE_GLOB)
 
-# Experiment
+# Xlib check at lines 5330-5331
 string(APPEND CMAKE_C_FLAGS "-I${X11_Xlib_INCLUDE_PATH}")
 string(APPEND CMAKE_EXE_LINKER_FLAGS "-L/usr/local/lib")
 check_func_headers(xlib "<X11/Xlib.h>;<X11/extensions/Xvlib.h>" "XvGetPortAttribute" "-lXv;-lX11;-lXext" CONFIG_XLIB)
-#[[
-Confirmed the following works when manually run from the build/configure_checks directory:
+# To Do: handle appending of CMAKE_C_FLAGS and CMAKE_EXE_LINKER_FLAGS in a more elegant manner (although this might also serve as a model for adding compiler and linker flags in a similar way to ffmpeg's configure script throughout)
 
-cc -I/usr/local/include xlib_preliminary.c /usr/local/lib/libXv.so /usr/local/lib/libX11.so /usr/local/lib/libXext.so -o xlib_preliminary.o
 
-Adding appropriate EXE_LINKER_FLAGS to get -L/usr/local/lib and C_FLAGS to add -I${X11_Xlib_INCLUDE_PATH} get it to pass the test...if I hardcode in the following libs on separate lines in check_ld's execute_process COMMAND:
 
-					-lX11
-					-lXv
-					-lXext
-					
-So now I've got to get it to print only those lines, conditionally, in a way that works with execute_process...
-]]
 
 
 file(CONFIGURE
