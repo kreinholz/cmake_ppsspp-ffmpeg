@@ -19,7 +19,7 @@ function(check_cc target ARGUMENTS RESULT_VAR)
 	set(OUTPUT_OBJ "${CONFIG_TESTS_DIR}/${target}.o")
 	execute_process(
 		COMMAND ${CMAKE_C_COMPILER} 
-				${CMAKE_C_FLAGS} 
+				${CMAKE_C_FLAGS}
 				-c "${CONFIG_TESTS_DIR}/${target}.c"
 				-o "${OUTPUT_OBJ}"
 		RESULT_VARIABLE result
@@ -156,17 +156,27 @@ function(check_ld target ARGUMENTS EXTERNAL_LIB RESULT_VAR)
 	set(CC_RESULT_VAR ${RESULT_VAR})
 	check_cc("${target}_preliminary" ${ARGUMENTS} ${CC_RESULT_VAR})
 	if (NOT "${EXTERNAL_LIB}" STREQUAL "")
-		string(SUBSTRING "${EXTERNAL_LIB}" 2 -1 EXTERNAL_LIB_TRIMMED)
-		find_library(${EXTERNAL_LIB} "${EXTERNAL_LIB_TRIMMED}")
+		list(LENGTH EXTERNAL_LIB len)
+		if (len GREATER 1)
+			foreach(lib IN LISTS EXTERNAL_LIB)
+				string(SUBSTRING "${lib}" 2 -1 lib_TRIMMED)
+				find_library(MYLIB_${lib_TRIMMED} NAMES ${lib} "${lib_TRIMMED}")
+				if (${MYLIB_${lib_TRIMMED}} MATCHES "-NOTFOUND")
+					message(FATAL_ERROR "Required library ${lib} not found!")
+				endif()
+				message(STATUS "lib is named ${lib}")
+				string(APPEND CMAKE_EXE_LINKER_FLAGS "${lib}") # This doesn't work either
+#				string(APPEND EXTERNAL_LIBS_STRING "${lib}\n") # Doesn't work--it just looks for 1 lib with LBs
+			endforeach()
+		endif()
 	endif()
 	if (${CC_RESULT_VAR} EQUAL 1)
 		set(OUTPUT_OBJ "${CONFIG_TESTS_DIR}/${target}_preliminary.o")
 		execute_process(
 			COMMAND ${CMAKE_C_COMPILER}
-					${CMAKE_EXE_LINKER_FLAGS}
 					${CMAKE_C_FLAGS}
+					${CMAKE_EXE_LINKER_FLAGS}
 					"${OUTPUT_OBJ}"
-					"${EXTERNAL_LIB}"
 					-o "${CONFIG_TESTS_DIR}/${target}.exe"
 			RESULT_VARIABLE result
 			OUTPUT_VARIABLE out
@@ -471,3 +481,24 @@ function(check_64bit arch32 arch64 expression RESULT_VAR)
 		set(${RESULT_VAR} ${arch32} PARENT_SCOPE)
 	endif()
 endfunction()
+
+# Rewrite of ffmpeg's check_gas function at line 4954 of configure script
+function(check_gas RESULT_VAR)
+	check_as(gas ".macro m n, y:vararg=0\n\\n: .int \\y\n.endm\nm x" ${RESULT_VAR})
+	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
+endfunction()
+
+# Rewrite of ffmpeg's check_exec function at line 1203 of configure script
+function(check_exec target ARGUMENT RESULT_VAR)
+	check_ld(${target} "${ARGUMENT}" "" ${RESULT_VAR})
+	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
+endfunction()
+
+# Rewrite of ffmpeg's check_exec_crash function at line 1207 of configure script
+function(check_exec_crash target ARGUMENT RESULT_VAR)
+	set(TEST_CODE "#include <signal.h>\nstatic void sighandler(int sig){\n    raise(SIGTERM)\;\n}\nint foo(void){\n	${ARGUMENT}\n}\nint (*func_ptr)(void) = foo\;\nint main(void){\n	signal(SIGILL, sighandler)\;\n	signal(SIGFPE, sighandler)\;\n	signal(SIGSEGV, sighandler)\;\n#ifdef SIGBUS\n	signal(SIGBUS, sighandler)\;\n#endif\n    return func_ptr()\;\n}" ${RESULT_VAR})
+	check_exec(${target} "${TEST_CODE}" ${RESULT_VAR})
+	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
+endfunction()
+
+# To Do: create a list of all config.h options set by variables as opposed to hardcoded, then run it through a convenience function at the end that sets any falsy variables to "0"

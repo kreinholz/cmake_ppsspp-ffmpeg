@@ -255,9 +255,10 @@ endif()
 # To Do: review lines 4728-4841 for probe_libc function
 
 # Check for PIC - see line 4845 of ffmpeg's configure script
-set(CONFIG_PIC 0)
+set(CONFIG_PIC 1)
 check_cpp_condition(pic "stdlib.h" "defined(__PIC__) || defined(__pic__) || defined(PIC)" CONFIG_PIC)
 # FIXME: ffmpeg's configure script gets passing test results on my system--yet this check fails; but it's clearly not defined in stdlib.h so I don't know how it passed with configure!
+# For now, default to "1" since the vast majority of build environments support/require PIC
 # To Do: per lines 4900-4912, add appropriate cflags and asflags (cppflags?) if PIC is enabled
 
 set(HAVE_INLINE_ASM 0)
@@ -276,7 +277,9 @@ check_cc(attribute_may_alias "union { int x; } __attribute__((may_alias)) x;" HA
 
 # Skipping endian test at lines 4945-4952 since PPSSPP is little endian only
 
-# To Do: rewrite check_gas() function starting at line 4954 of ffmpeg's configure script
+# Note: this check should only work on aarch64, arm, and ppc altivec
+check_gas(gas HAVE_GNU_AS)
+# To Do: might need to add more related to check_gas() function starting at line 4954 of ffmpeg's configure script
 
 # Inline ASM labels
 set(HAVE_INLINE_ASM_LABELS 0)
@@ -284,12 +287,13 @@ check_inline_asm(inline_asm_labels "\"1:\\n\"" HAVE_INLINE_ASM_LABELS)
 set(HAVE_INLINE_ASM_NONLOCAL_LABELS 0)
 check_inline_asm(inline_asm_nonlocal_labels "\"Label:\\n\"" HAVE_INLINE_ASM_NONLOCAL_LABELS)
 
-
-
 if (${ARCH} STREQUAL "aarch64")
 	# To Do: fix check_insn() function, implement the checks at lines 5005-5011
+	check_insn(armv8 "prfm   pldl1strm, [x0]" HAVE_ARMV8 HAVE_ARMV8_INLINE HAVE_ARMV8_EXTERNAL)
+	check_insn(neon "ext   v0.8B, v0.8B, v1.8B, #1" HAVE_NEON HAVE_NEON_INLINE HAVE_NEON_EXTERNAL)
+	check_insn(vfp "fmadd d0,    d0,    d1,    d2" HAVE_VFP HAVE_VFP_INLINE HAVE_VFP_EXTERNAL)
 elseif (${ARCH} STREQUAL "arm")
-	if (MSVC) # Fixme: need to detect whether compiler is MSVC
+	if (MSVC)
 		check_cpp_condition(thumb1 "stddef.h" "defined _M_ARMT" CONFIG_THUMB)
 	endif()
 	check_cpp_condition(thumb_defined "stddef.h" "defined __thumb__" THUMB_DEFINED)
@@ -302,7 +306,184 @@ elseif (${ARCH} STREQUAL "arm")
 		check_cpp_condition(vfp_args2 "stddef.h" "defined _M_ARM_FP && _M_ARM_FP >= 30" HAVE_VFP_ARGS)
 	endif()
 	# To do: a second if (NOT HAVE_VFP_ARGS), lines 5031-5037, with multiple chained checks
+	check_insn(armv5te "qadd r0, r0, r0" HAVE_ARMV5TE HAVE_ARMV5TE_INLINE HAVE_ARMV5TE_EXTERNAL)
+	check_insn(armv6 "sadd16 r0, r0, r0" HAVE_ARMV6 HAVE_ARMV6_INLINE HAVE_ARMV6_EXTERNAL)
+	check_insn(armv6t2 "movt r0, #0" HAVE_ARMV6T2 HAVE_ARMV6T2_INLINE HAVE_ARMV6T2_EXTERNAL)
+	check_insn(neon "vadd.i16 q0, q0, q0" HAVE_NEON HAVE_NEON_INLINE HAVE_NEON_EXTERNAL)
+	check_insn(vfp "fadds s0, s0, s0" HAVE_VFP HAVE_VFP_INLINE HAVE_VFP_EXTERNAL)
+	check_insn(vfpv3 "vmov.f32 s0, #1.0" HAVE_VFPV3 HAVE_VFPV3_INLINE HAVE_VFPV3_EXTERNAL)
+	check_insn(setend "setend be" HAVE_SETEND HAVE_SETEND_INLINE HAVE_SETEND_EXTERNAL)
+	# Note: The above 7 only get enabled on Linux and Android, per lines 5050-5052
+	check_inline_asm(asm_mod_q "\"add r0, %Q0, %R0\" :: \"r\"((long long)0)\"" HAVE_ASM_MOD_Q)
+    check_as(as_dn_directive "ra .dn d0.i16\n.unreq ra" HAVE_AS_DN_DIRECTIVE)
+	# I don't think I need to worry about lines 5061-5066
+elseif (${ARCH} STREQUAL "mips")	# Technically these checks should only run if HAVE_ LOONGSON2, LOONGSON3, MMI
+	check_inline_asm(loongson2 "\"dmult.g $8, $9, $10\"" HAVE_LOONGSON2_INLINE)
+	check_inline_asm(loongson3 "\"gsldxc1 $f0, 0($2, $3)\"" HAVE_LOONGSON3_INLINE)
+	check_inline_asm(mmi "\"punpcklhw $f0, $f0, $f0\"" HAVE_MMI_INLINE)
+	if (ARCH_MIPS64)	# Again, these checks should conditionally run if HAVE_ MIPS64R6, MIPS64R2, etc.
+		check_inline_asm_flags(mips64r6 "\"dlsa $0, $0, $0, 1\"" HAVE_MIPS64R6_INLINE) # To Do: deal with '-mips64r6' flag if check passes
+		check_inline_asm_flags(mips64r2 "\"dext $0, $0, 0, 1\"" HAVE_MIPS64R2_INLINE)
+		if (NOT HAVE_MIPS64R6 AND NOT HAVE_MIPS64R2)
+			check_inline_asm_flags(mips64r1 "\"daddi $0, $0, 0\"" HAVE_MIPS64R1_INLINE)
+		endif()
+	else()
+		check_inline_asm_flags(mips32r6 "\"aui $0, $0, 0\"" HAVE_MIPS32R6_INLINE)
+		check_inline_asm_flags(mips32r5 "\"eretnc\"" HAVE_MIPS32R5_INLINE)
+		check_inline_asm_flags(mips32r2 "\"ext $0, $0, 0, 1\"" HAVE_MIPS32R2_INLINE)
+		if (NOT HAVE_MIPS32R6 AND NOT HAVE_MIPS32R5 AND NOT HAVE_MIPS32R2)
+			check_inline_asm_flags(mips32r1 "\"addi $0, $0, 0\"" HAVE_MIPS32R1_INLINE)
+		endif()
+	endif()
+	check_inline_asm_flags(mipsfpu "\"cvt.d.l $f0, $f2\"" HAVE_MIPSFPU_INLINE)
+	if (HAVE_MIPSFPU)
+		if (HAVE_MIPS32R6 OR HAVE_MIPS32R6 OR HAVE_MIPS64R6)
+			check_inline_asm_flags(mipsfpu "\"cvt.d.l $f0, $f1\"" HAVE_MIPSFPU_INLINE)
+		elseif (HAVE_MSA)
+			check_inline_asm_flags(msa "\"addvi.b $w0, $w1, 1\"" HAVE_MSA_INLINE1)
+			if (HAVE_MSA_INLINE1)
+				check_header(msa "msa.h" HAVE_MSA_INLINE)
+			endif()
+		endif()
+	endif()
+	if (HAVE_MIPSDSP)
+		check_inline_asm_flags(mipsdsp "\"addu.qb $t0, $t1, $t2\"" HAVE_MIPSDSP_INLINE)
+	endif()
+	if (HAVE_MIPSDSP2)
+		check_inline_asm_flags(mipsdspr2 "\"absq_s.qb $t0, $t1\"" HAVE_MIPSDSP2_INLINE)
+	endif()
+# Note: skipping parisc and ppc, lines 5092-5136
+elseif (${ARCH} STREQUAL "x86")
+	check_builtin(rdtsc "<intrin.h>" "__rdtsc()" HAVE_RDTSC)
+	check_builtin (mm_empty "<mmintrin.h>" "_mm_empty()" HAVE_MM_EMPTY)
+	set(HAVE_LOCAL_ALIGNED_8 1)
+	set(HAVE_LOCAL_ALIGNED_16 1)
+	set(HAVE_LOCAL_ALIGNED_32 1)
+	check_exec_crash(ebp "volatile int i=0\;\n__asm__ volatile (\"xorl %%ebp, %%ebp\" ::: \"%ebp\")\;\nreturn i\;" HAVE_EBP_AVAILABLE)
+	check_inline_asm(ebx_available "\"\"::\"b\"(0)" HAVE_EBX_AVAILABLE1)
+	if (HAVE_EBX_AVAILABLE1)
+		check_inline_asm(ebx_available "\"\":::\"%ebx\"" HAVE_EBX_AVAILABLE)
+	endif()
+	check_inline_asm(xmm_clobbers "\"\":::\"%xmm0\"" HAVE_XMM_CLOBBERS)
+	check_inline_asm(inline_asm_direct_symbol_refs "\"movl '$extern_prefix'test, %eax\"" HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS)
+	if (NOT HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS)
+		check_inline_asm(inline_asm_direct_symbol_refs "\"movl '$extern_prefix'test(%rip), %eax\"" HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS)
+	endif()
+	check_inline_asm(ssse3_inline "\"pabsw %xmm0, %xmm0\"" HAVE_SSSE3_INLINE)
+	check_inline_asm(mmxext_inline "\"pmaxub %mm0, %mm1\"" HAVE_MMXEXT_INLINE)
+	# To Do: set yasm object format if needed--see lines 5173-5180
+	# To Do: set appropriate YASM flags--see lines 5185-5188
+	check_yasm(yasm "movbe ecx, [5]" HAVE_YASM)
+	if (HAVE_YASM)
+		check_yasm(avx2_external "vextracti128 xmm0, ymm0, 0" HAVE_AVX2_EXTERNAL)
+		check_yasm(xop_external "vpmacsdd xmm0, xmm1, xmm2, xmm3" HAVE_XOP_EXTERNAL)
+		check_yasm(fma4_external "vfmaddps ymm0, ymm1, ymm2, ymm3" HAVE_FMA4_EXTERNAL)
+		check_yasm(cpunop "CPU amdnop" HAVE_CPUNOP_EXTERNAL)
+	endif()
+	if (${CPU_NAME} MATCHES "athlon*|opteron*|k8*|pentium|pentium-mmx|prescott|nocona|atom|geode")
+		set(HAVE_FAST_CLZ 0)
+	else()
+		set(HAVE_FAST_CLZ 1)
+	endif()
 endif()
+
+# Line 5207
+check_code(intrinsics_neon cc "<arm_neon.h>" "int16x8_t test = vdupq_n_s16(0)" HAVE_INTRINSICS_NEON)
+
+# To Do: implement check_ld_flags, only if needed. See lines 5209-5210
+
+# Note: modifying check_func dlopen test as we don't need decklink, frei0r, ladspa, or nvenc
+check_func(dlopen "dlopen" HAVE_DLOPEN)	# Note: we could modify check_func to allow a shared lib arg vice passing ""
+
+# Skipping lines 5225-5262 as we disabled 'network'
+
+check_builtin(atomic_cas_ptr "<atomic.h>" "void **ptr\; void *oldval, *newval\; atomic_cas_ptr(ptr, oldval, newval)" HAVE_ATOMIC_CAS_PTR)
+check_builtin(atomic_compare_exchange "" "int *ptr, *oldval\; int newval\; __atomic_compare_exchange_n(ptr, oldval, newval, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)" HAVE_ATOMIC_COMPARE_EXCHANGE)
+check_builtin(machine_rw_barrier "<mbarrier.h>" "__machine_rw_barrier()" HAVE_MACHINE_RW_BARRIER)
+check_builtin(MemoryBarrier "<windows.h>" "MemoryBarrier()" HAVE_MEMORYBARRIER)
+check_builtin(sarestart "<signal.h>" "SA_RESTART" HAVE_SARESTART)
+check_builtin(sync_val_compare_and_swap "" "int *ptr\; int oldval, newval\; __sync_val_compare_and_swap(ptr, oldval, newval)" HAVE_SYNC_VAL_COMPARE_AND_SWAP)
+check_builtin(gmtime_r "<time.h>" "time_t *time\; struct tm *tm\; gmtime_r(time, tm)" HAVE_GMTIME_R)
+check_builtin(localtime_r "<time.h>" "time_t *time\; struct tm *tm\; localtime_r(time, tm)" HAVE_LOCALTIME_R)
+
+check_func_headers(aligned_malloc "<malloc.h>" "_aligned_malloc" "" HAVE_ALIGNED_MALLOC)
+# Note: we don't have a 'custom_allocator' option set, so we don't need a malloc_prefix
+check_func(memalign "memalign" HAVE_MEMALIGN)
+check_func(posix_memalign "posix_memalign" HAVE_POSIX_MEMALIGN)
+check_func(access "access" HAVE_ACCESS)
+check_func_headers(arc4random "<stdlib.h>" "arc4random" "" HAVE_ARC4RANDOM)
+check_func_headers(clock_gettime "<time.h>" "clock_gettime" "" HAVE_CLOCK_GETTIME)
+if (NOT HAVE_CLOCK_GETTIME)
+	check_func_headers(clock_gettime "<time.h>" "clock_gettime" "-lrt" HAVE_CLOCK_GETTIME)
+	# To Do: if this fallback check passes, need to add "-lrt" as an extra lib
+endif()
+check_func(fcntl "fcntl" HAVE_FCNTL)
+check_func(fork "fork" HAVE_FORK)
+check_func(gethrtime "gethrtime" HAVE_GETHRTIME)
+check_func(getopt "getopt" HAVE_GETOPT)
+check_func(getrusage "getrusage" HAVE_GETRUSAGE)
+check_func(gettimeofday "gettimeofday" HAVE_GETTIMEOFDAY)
+check_func(isatty "isatty" HAVE_ISATTY)
+check_func(mach_absolute_time "mach_absolute_time" HAVE_MACH_ABSOLUTE_TIME)
+check_func(mkstemp "mkstemp" HAVE_MKSTEMP)
+check_func(mmap "mmap" HAVE_MMAP)
+check_func(mprotect "mprotect" HAVE_MPROTECT)
+check_func_headers(nanosleep "<time.h>" "nanosleep" "" HAVE_NANOSLEEP)
+if (NOT HAVE_NANOSLEEP)
+	check_func_headers(nanosleep "<time.h>" "nanosleep" "-lrt" HAVE_NANOSLEEP)
+	# To Do: if this fallback check passes, need to add "-lrt" as an extra lib
+endif()
+check_func(sched_getaffinity "sched_getaffinity" HAVE_SCHED_GETAFFINITY)
+check_func(setrlimit "setrlimit" HAVE_SETRLIMIT)
+check_struct(st_mtim.tv_nsec "<sys/stat.h>" "struct stat" st_mtim.tv_nsec HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC)
+# To Do: check the above; in ffmpeg's configure script, there's a -D_BSD_SOURCE flag added to the end. Supposedly
+# that's been deprecated since 2014 and the new flag is -D_DEFAULT_SOURCE to enable various extensions to POSIX
+check_func(strerror_r "strerror_r" HAVE_STRERROR_R)
+check_func(sysconf "sysconf" HAVE_SYSCONF)
+check_func(sysctl "sysctl" HAVE_SYSCTL)
+check_func(usleep "usleep" HAVE_USLEEP)
+
+check_func_headers(kbhit "<conio.h>" "kbhit" "" HAVE_KBHIT)
+check_func_headers(setmode "<io.h>" "setmode" "" HAVE_SETMODE)
+check_func_headers(lzo1x_999_compress "<lzo/lzo1x.h>" "lzo1x_999_compress" "" HAVE_LZO1X_999_COMPRESS)
+check_func_headers(getenv "<stdlib.h>" "getenv" "" HAVE_GETENV)
+check_func_headers(lstat "<sys/stat.h>" "lstat" "" HAVE_LSTAT)
+
+# Note: lines 5318-5328 all rely on windows.h header--I'm not sure why they're not inside a Windows-only conditional
+check_header(windows "windows.h" HAVE_WINDOWS_H)
+if (HAVE_WINDOWS_H)
+	check_func_headers(cotaskmemfree "<windows.h>" "CoTaskMemFree" "-lole32" HAVE_COTASKMEMFREE)
+	check_func_headers(getprocessaffinitymask "<windows.h>" "GetProcessAffinityMask" "" HAVE_GETPROCESSAFFINITYMASK)
+	check_func_headers(getprocesstimes "<windows.h>" "GetProcessTimes" "" HAVE_GETPROCESSTIMES)
+	check_func_headers(getsystemtimeasfiletime "<windows.h>" "GetSystemTimeAsFileTime" "" HAVE_GETSYSTEMTIMEASFILETIME)
+	check_func_headers(mapviewoffile "<windows.h>" "MapViewOfFile" "" HAVE_MAPVIEWOFFILE)
+	check_func_headers(peeknamedpipe "<windows.h>" "PeekNamedPipe" "" HAVE_PEEKNAMEDPIPE)
+	check_func_headers(setconsoletextattribute "<windows.h>" "SetConsoleTextAttribute" "" HAVE_SETCONSOLETEXTATTRIBUTE)
+	check_func_headers(setconsolectrlhandler "<windows.h>" "SetConsoleCtrlHandler" "" HAVE_SETCONSOLECTRLHANDLER)
+	check_func_headers(sleep "<windows.h>" "Sleep" "" HAVE_SLEEP)
+	check_func_headers(virtualalloc "<windows.h>" "VirtualAlloc" "" HAVE_VIRTUALALLOC)
+	check_struct(condition_variable_ptr "<windows.h>" "CONDITION_VARIABLE" "Ptr" HAVE_CONDITION_VARIABLE_PTR)
+endif()
+check_func_headers(glob "<glob.h>" "glob" "" HAVE_GLOB)
+
+# Experiment
+string(APPEND CMAKE_C_FLAGS "-I${X11_Xlib_INCLUDE_PATH}")
+string(APPEND CMAKE_EXE_LINKER_FLAGS "-L/usr/local/lib")
+check_func_headers(xlib "<X11/Xlib.h>;<X11/extensions/Xvlib.h>" "XvGetPortAttribute" "-lXv;-lX11;-lXext" CONFIG_XLIB)
+#[[
+Confirmed the following works when manually run from the build/configure_checks directory:
+
+cc -I/usr/local/include xlib_preliminary.c /usr/local/lib/libXv.so /usr/local/lib/libX11.so /usr/local/lib/libXext.so -o xlib_preliminary.o
+
+Adding appropriate EXE_LINKER_FLAGS to get -L/usr/local/lib and C_FLAGS to add -I${X11_Xlib_INCLUDE_PATH} get it to pass the test...if I hardcode in the following libs on separate lines in check_ld's execute_process COMMAND:
+
+					-lX11
+					-lXv
+					-lXext
+					
+So now I've got to get it to print only those lines, conditionally, in a way that works with execute_process...
+]]
+
 
 file(CONFIGURE
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/config.h"
@@ -808,7 +989,7 @@ file(CONFIGURE
 #define CONFIG_SDL 0
 #define CONFIG_SECURETRANSPORT 0
 #define CONFIG_X11GRAB 0
-#define CONFIG_XLIB ${HAVE_XLIB}
+#define CONFIG_XLIB ${CONFIG_XLIB}
 #define CONFIG_ZLIB ${HAVE_ZLIB}
 #define CONFIG_FTRAPV 0
 #define CONFIG_GRAY 0
