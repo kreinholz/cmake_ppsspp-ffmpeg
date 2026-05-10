@@ -450,7 +450,7 @@ check_func_headers(getenv "<stdlib.h>" "getenv" "" HAVE_GETENV)
 check_func_headers(lstat "<sys/stat.h>" "lstat" "" HAVE_LSTAT)
 
 # Note: lines 5318-5328 all rely on windows.h header--I'm not sure why they're not inside a Windows-only conditional
-check_header(windows "windows.h" HAVE_WINDOWS_H)
+check_header(windows "windows.h" HAVE_WINDOWS_H)	# Note: check repeated at line 5358 so doing only here instead
 if (HAVE_WINDOWS_H)
 	check_func_headers(cotaskmemfree "<windows.h>" "CoTaskMemFree" "-lole32" HAVE_COTASKMEMFREE)
 	check_func_headers(getprocessaffinitymask "<windows.h>" "GetProcessAffinityMask" "" HAVE_GETPROCESSAFFINITYMASK)
@@ -468,13 +468,68 @@ check_func_headers(glob "<glob.h>" "glob" "" HAVE_GLOB)
 
 # Xlib check at lines 5330-5331
 string(APPEND CMAKE_C_FLAGS "-I${X11_Xlib_INCLUDE_PATH}")
+string(APPEND CMAKE_CXX_FLAGS "-I${X11_Xlib_INCLUDE_PATH}")	# Note: needed for check_header to find XvMClib
 string(APPEND CMAKE_EXE_LINKER_FLAGS "-L/usr/local/lib")
 check_func_headers(xlib "<X11/Xlib.h>;<X11/extensions/Xvlib.h>" "XvGetPortAttribute" "-lXv;-lX11;-lXext" CONFIG_XLIB)
 # To Do: handle appending of CMAKE_C_FLAGS and CMAKE_EXE_LINKER_FLAGS in a more elegant manner (although this might also serve as a model for adding compiler and linker flags in a similar way to ffmpeg's configure script throughout)
 
+check_header(direct "direct.h" HAVE_DIRECT_H)
+check_header(dirent "dirent.h" HAVE_DIRENT_H)
+check_header(dlfcn "dlfcn.h" HAVE_DLFCN_H)
+check_header(d3d11 "d3d11.h" HAVE_D3D11_H)
+check_header(dxva "dxva.h" HAVE_DXVA_H)
+check_header(dxva2api "dxva2api.h" HAVE_DXVA2API_H)	# -D_WIN32_WINNT=0x0600
+check_header(io "io.h" HAVE_IO_H)
+check_header(libcrystalhd_if "libcrystalhd/libcrystalhd_if.h" CONFIG_LIBCRYSTALHD)	# disabled so unnecessary check
+check_header(mach_time "mach/mach_time.h" HAVE_MACH_MACH_TIME_H)
+check_header(malloc "malloc.h" HAVE_MALLOC_H)
+check_header(udplite "net/udplite.h" HAVE_UDPLITE_H)
+check_header(poll "poll.h" HAVE_POLL_H)
+check_header(mman "sys/mman.h" HAVE_SYS_MMAN_H)
+check_header(param "sys/param.h" HAVE_SYS_PARAM_H)
+check_header(resource "sys/resource.h" HAVE_SYS_RESOURCE_H)
+check_header(select "sys/select.h" HAVE_SYS_SELECT_H)
+check_header(time "sys/time.h" HAVE_SYS_TIME_H)
+check_header(un "sys/un.h" HAVE_SYS_UN_H)
+check_header(termios "sys/termios.h" HAVE_SYS_TERMIOS_H)
+check_header(unistd "sys/unistd.h" HAVE_SYS_UNISTD_H)
+check_header(valgrind "valgrind/valgrind.h" HAVE_VALGRIND_VALGRIND_H)
+check_header(vdpau "vdpau/vdpau.h" CONFIG_VDPAU)
+check_header(vdpau_x11 "vdpau/vdpau_x11.h" HAVE_VDPAU_X11)
+check_header(VDADecoder "VideoDecodeAcceleration/VDADecoder.h" CONFIG_VDA)	# disabled so unnecessary check
+check_header(VideoToolbox "VideoToolbox/VideoToolbox.h" CONFIG_VIDEOTOOLBOX) # disabled so unnecessary check
+# Note: we already checked for windows.h header above so skipping here
+check_header(XvMClib "X11/extensions/XvMClib.h" CONFIG_XVMC)	# Note: check fails to do compiler error!
+check_header(types "asm/types.h" HAVE_ASM_TYPES_H)
+
+# Line 5362
+check_lib2(commandlinetoargvw "<windows.h>;<shellapi.h>" "CommandLineToArgvW" "-shell32" HAVE_COMMANDLINETOARGVW)
+check_lib2(cryptgenrandom "<windows.h>;<wincrypt.h>" "CryptGenRandom" "-ladvapi32" HAVE_CRYPTGENRANDOM)
+check_lib2(getprocessmemoryinfo "<windows.h>;<psapi.h>" "GetProcessMemoryInfo" "-lpsapi" HAVE_GETPROCESSMEMORYINFO)
+check_lib(utgetostypefromstring "CoreServices/CoreServices.h" "UTGetOSTypeFromString" HAVE_UTGETOSTYPEFROMSTRING)
+# To Do: the above has a follow-up: "-framework CoreServices"
+check_struct(ru_maxrss "<sys/time.h>;<sys/resource.h>" "struct rusage" ru_maxrss HAVE_STRUCT_RUSAGE_RU_MAXRSS)
+
+check_type(dxva_picparams_hevc "<windows.h>;<dxva.h>" "DXVA_PicParams_HEVC" DXVA_PICPARAMS_HEVC) # To do: ffmpeg configure doesn't set a variable, it sets the following flags: -DWINAPI_FAMILY=WINAPI_FAMILY_DESKTOP_APP -D_CRT_BUILD_DESKTOP_APP=0
 
 
+check_type(dxva_picparams_vp9 "<windows.h>;<dxva.h>" "DXVA_PicParams_VP9" DXVA_PICPARAMS_VP9) # To do: set the following flags: -DWINAPI_FAMILY=WINAPI_FAMILY_DESKTOP_APP -D_CRT_BUILD_DESKTOP_APP=0
+check_type(id3d11videodecoder "<windows.h>;<d3d11.h>" "ID3D11VideoDecoder" ID3D11VIDEODECODER) # To do: something
+check_type(id3d11videocontext "<windows.h>;<d3d11.h>" "ID3D11VideoContext" ID3D11VIDEOCONTEXT) # To do: something
+check_type(dxva2_configpicturedecode "<d3d9.h>;<dxva2api.h>" "DXVA2_ConfigPictureDecode" DXVA2_CONFIGPICTUREDECODE)
+# To do: set flag -D_WIN32_WINNT=0x0602
 
+check_type(vapictureparameterbufferhevc "<va/va.h>" "VAPictureParameterBufferHEVC" VAPICTUREPARAMETERBUFFERHEVC)
+# To do: something with the above
+check_type(vadecpictureparameterbuffervp9 "<va/va.h>" "VADecPictureParameterBufferVP9" VADECPICTUREPARAMETERBUFFERVP9)
+# To do: something with the above
+
+check_type(vdppictureinfohevc "<vdpau/vdpau.h>" "VdpPictureInfoHEVC" VDPPICTUREINFOHEVC) # To do: something
+
+check_cpp_condition(winrt "windows.h" "!WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)" HAVE_WINRT) 
+# To Do: enable WINRT if true--simply adding the variable to the end of the check might do it
+
+# Next up: lines 5382-5389, w32threads vs pthreads enable/disable
 
 file(CONFIGURE
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/config.h"
@@ -995,9 +1050,9 @@ file(CONFIGURE
 #define CONFIG_DXVA2 ${HAVE_DXVA2_LIB}
 #define CONFIG_VAAPI ${HAVE_VAAPI_X11}
 #define CONFIG_VDA 0
-#define CONFIG_VDPAU ${HAVE_VDPAU_X11}
+#define CONFIG_VDPAU ${CONFIG_VDPAU}
 #define CONFIG_VIDEOTOOLBOX 0
-#define CONFIG_XVMC 1
+#define CONFIG_XVMC ${CONFIG_XVMC}
 #define CONFIG_GPL 0
 #define CONFIG_NONFREE 0
 #define CONFIG_VERSION3 0
