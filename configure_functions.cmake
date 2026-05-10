@@ -4,15 +4,6 @@
 set(CONFIG_TESTS_DIR "${CMAKE_CURRENT_BINARY_DIR}/configure_checks")
 file(MAKE_DIRECTORY ${CONFIG_TESTS_DIR})
 
-# Very short convenience function (written by me) to set specified variable to "1" if defined, "0" if undefined
-function(assign_value INPUT_VAR)
-	if(${INPUT_VAR})
-		set(${INPUT_VAR} 1 PARENT_SCOPE)
-	else()
-		set(${INPUT_VAR} 0 PARENT_SCOPE)
-	endif()
-endfunction()
-
 # Rewrite of ffmpeg's check_cc function at line 866 of configure script
 function(check_cc target ARGUMENTS RESULT_VAR)
 	file(WRITE "${CONFIG_TESTS_DIR}/${target}.c" "${ARGUMENTS}")
@@ -499,4 +490,11 @@ function(check_exec_crash target ARGUMENT RESULT_VAR)
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
 
-# To Do: create a list of all config.h options set by variables as opposed to hardcoded, then run it through a convenience function at the end that sets any falsy variables to "0"
+# convenience function at the end that sets any truthy variables to "1" and any falsy variables to "0"
+function(set_disabled_to_zero option)
+	if(${option})
+		set(${option} 1 PARENT_SCOPE)
+	else()
+		set(${option} 0 PARENT_SCOPE)
+	endif()
+endfunction()
