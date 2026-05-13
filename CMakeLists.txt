@@ -9,7 +9,7 @@ find_package(Threads REQUIRED)
 # GNU windres isn't required, but used to compile Windows .rc files with MinGW. MSVC can also compile them
 find_package(GNU_WINDRES QUIET)
 find_package(ZLIB)
-find_package(X11 QUIET)
+find_package(X11 QUIET)	# To Do: we should really limit this to just the X11 components used by ffmpeg
 find_package(PkgConfig)
 if(PkgConfig_FOUND)
 	pkg_check_modules(VAAPI_X11 IMPORTED_TARGET libva-x11)
@@ -128,3 +128,38 @@ target_include_directories(swscale PRIVATE ${SRC_DIR} ${CMAKE_CURRENT_BINARY_DIR
 target_include_directories(swscale INTERFACE ${LIBSWSCALE_HEADERS})
 file(COPY ${LIBSWSCALE_HEADERS} DESTINATION ${HEADER_INSTALL_DIRECTORY}/libswscale)
 set(LIBSWSCALE_LIBRARY swscale)
+
+# Run strip on the libraries to remove unneeded symbols
+find_program(STRIP_TOOL strip)
+if(STRIP_TOOL)
+	add_custom_command(
+		TARGET avcodec
+		POST_BUILD
+		COMMAND ${STRIP_TOOL} --strip-unneeded $<TARGET_FILE:avcodec>
+		COMMENT "Stripping symbols from avcodec"
+	)
+		add_custom_command(
+		TARGET avformat
+		POST_BUILD
+		COMMAND ${STRIP_TOOL} --strip-unneeded $<TARGET_FILE:avformat>
+		COMMENT "Stripping symbols from avformat"
+	)
+		add_custom_command(
+		TARGET avutil
+		POST_BUILD
+		COMMAND ${STRIP_TOOL} --strip-unneeded $<TARGET_FILE:avutil>
+		COMMENT "Stripping symbols from avutil"
+	)
+		add_custom_command(
+		TARGET swresample
+		POST_BUILD
+		COMMAND ${STRIP_TOOL} --strip-unneeded $<TARGET_FILE:swresample>
+		COMMENT "Stripping symbols from swresample"
+	)
+		add_custom_command(
+		TARGET swscale
+		POST_BUILD
+		COMMAND ${STRIP_TOOL} --strip-unneeded $<TARGET_FILE:swscale>
+		COMMENT "Stripping symbols from swscale"
+	)
+endif()
