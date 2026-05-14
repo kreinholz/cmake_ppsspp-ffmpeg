@@ -13,7 +13,7 @@ include(configure_functions.cmake)
 # Backup and remove PPSSPP's compiler flags to enable some of these checks to complete
 set(OLD_CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 set(CMAKE_C_FLAGS "" CACHE STRING "C compiler flags" FORCE)
-set(OLD_CMAKE_CXX_FLAGS "$CMAKE_CXX_FLAGS}")
+set(OLD_CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS "" CACHE STRING "CXX compiler flags" FORCE)
 set(OLD_CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}")
 set(CMAKE_SHARED_LINKER_FLAGS "")

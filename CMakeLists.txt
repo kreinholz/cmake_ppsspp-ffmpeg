@@ -21,7 +21,10 @@ include(generated_headers.cmake)
 
 #set(CMAKE_C_FLAGS "-fPIC")
 #string(APPEND CMAKE_C_FLAGS "-fPIC")
-
+message(STATUS "current inherited compiler options from PPSSPP: ${COMPILE_OPTIONS}")
+message(STATUS "current inherited C Flags from PPSSPP: ${CMAKE_C_FLAGS}")
+message(STATUS "current inherited CXX Flags from PPSSPP: ${CMAKE_CXX_FLAGS}")
+message(STATUS "current inherited LD Flags from PPSSPP: ${CMAKE_SHARED_LINKER_FLAGS}")
 # To Do - conditionally apply COMPILER_Flags based on the build target
 
 # Mimic the naming convention of current ppsspp-ffmpeg precompiled libraries and distributed headers
