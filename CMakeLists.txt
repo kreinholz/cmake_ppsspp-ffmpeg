@@ -21,10 +21,21 @@ include(generated_headers.cmake)
 
 #set(CMAKE_C_FLAGS "-fPIC")
 #string(APPEND CMAKE_C_FLAGS "-fPIC")
-message(STATUS "current inherited compiler options from PPSSPP: ${COMPILE_OPTIONS}")
+# Temporary debugging statements to figure out what compile options might be causing broken ffmpeg when built as a module instead of standalone
+get_directory_property(opts COMPILE_OPTIONS)
+message("Directory-wide inherited COMPILE_OPTIONS: ${opts}")
 message(STATUS "current inherited C Flags from PPSSPP: ${CMAKE_C_FLAGS}")
 message(STATUS "current inherited CXX Flags from PPSSPP: ${CMAKE_CXX_FLAGS}")
 message(STATUS "current inherited LD Flags from PPSSPP: ${CMAKE_SHARED_LINKER_FLAGS}")
+
+# Backup and remove PPSSPP's compiler flags to enable some of these checks to complete
+set(OLD_CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "" CACHE STRING "C compiler flags" FORCE)
+set(OLD_CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "" CACHE STRING "CXX compiler flags" FORCE)
+set(OLD_CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}")
+set(CMAKE_SHARED_LINKER_FLAGS "")
+set_directory_properties(PROPERTIES COMPILE_OPTIONS "")
 # To Do - conditionally apply COMPILER_Flags based on the build target
 
 # Mimic the naming convention of current ppsspp-ffmpeg precompiled libraries and distributed headers
@@ -113,6 +124,12 @@ if(STRIP_TOOL)
 		COMMENT "Stripping symbols from swscale"
 	)
 endif()
+
+# Restore PPSSPP's original compiler flags
+set(CMAKE_C_FLAGS "${OLD_CMAKE_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${OLD_CMAKE_CXX_FLAGS}")
+set(CMAKE_SHARED_LINKER_FLAGS "${OLD_CMAKE_SHARED_LINKER_FLAGS}")
+set_directory_properties(PROPERTIES COMPILE_OPTIONS "${opts}")
 
 # Make sure to set appropriate options found in PPSSPP's root CMakeLists.txt file at lines 1055-1067
 set(CMAKE_REQUIRED_FLAGS "-pedantic -Wall -Werror -Wno-unused-variable")

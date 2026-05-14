@@ -10,14 +10,6 @@ include(CheckIncludeFile)
 
 include(configure_functions.cmake)
 
-# Backup and remove PPSSPP's compiler flags to enable some of these checks to complete
-set(OLD_CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
-set(CMAKE_C_FLAGS "" CACHE STRING "C compiler flags" FORCE)
-set(OLD_CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-set(CMAKE_CXX_FLAGS "" CACHE STRING "CXX compiler flags" FORCE)
-set(OLD_CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}")
-set(CMAKE_SHARED_LINKER_FLAGS "")
-
 # Check for extern_prefix
 check_cc(ff_extern "int ff_extern;" HAVE_ff_extern)
 execute_process(
@@ -323,11 +315,6 @@ set(settings-list "ARCH_AARCH64;ARCH_ALPHA;ARCH_AMD64;ARCH_ARM;ARCH_AVR32;ARCH_A
 foreach(option IN LISTS settings-list)
 	set_disabled_to_zero(${option})
 endforeach()
-
-# Restore PPSSPP's original compiler flags
-set(CMAKE_C_FLAGS "${OLD_CMAKE_C_FLAGS}")
-set(CMAKE_CXX_FLAGS "${OLD_CMAKE_CXX_FLAGS}")
-set(CMAKE_SHARED_LINKER_FLAGS "${OLD_CMAKE_SHARED_LINKER_FLAGS}")
 
 file(CONFIGURE
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/config.h"
