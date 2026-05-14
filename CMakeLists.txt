@@ -9,55 +9,6 @@ find_package(Threads REQUIRED)
 # GNU windres isn't required, but used to compile Windows .rc files with MinGW. MSVC can also compile them
 find_package(GNU_WINDRES QUIET)
 find_package(ZLIB)
-find_package(X11 QUIET)	# To Do: we should really limit this to just the X11 components used by ffmpeg
-find_package(PkgConfig)
-if(PkgConfig_FOUND)
-	pkg_check_modules(VAAPI_X11 IMPORTED_TARGET libva-x11)
-	pkg_check_modules(VDPAU_X11 IMPORTED_TARGET vdpau)
-endif()
-
-# Assign appropriate Assembler settings based on architecture and target
-option(ENABLE_OPTIMIZATIONS "Build ffmpeg with architecture-specific optimizations and Machine Assembly code" OFF)
-if (CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*|x86.*|i686.*|i386.*")
-	find_program(YASM_EXECUTABLE yasm)
-	if(YASM_EXECUTABLE)
-		message(STATUS "Assembler found at: ${YASM_EXECUTABLE}. Enabling ${CMAKE_SYSTEM_PROCESSOR} optimizations")
-		enable_language(C ASM_NASM)
-		set(ENABLE_OPTIMIZATIONS ON CACHE BOOL "Build ffmpeg with architecture-specific optimizations" FORCE)
-	else()
-		message(WARNING "YASM not found. Building ffmpeg without ${CMAKE_SYSTEM_PROCESSOR} optimizations")
-	endif()
-elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*|arm.*|mips.*")
-	if(CMAKE_ASM_COMPILER)
-		message(STATUS "Assembler found at: ${CMAKE_ASM_COMPILER}. Enabling ${CMAKE_SYSTEM_PROCESSOR} optimizations")
-		enable_language(C ASM)
-		set(ENABLE_OPTIMIZATIONS ON CACHE BOOL "Build ffmpeg with architecture-specific optimizations" FORCE)
-	else()
-		message(WARNING "Assembler not found. Building ffmpeg without ${CMAKE_SYSTEM_PROCESSOR} optimizations")
-	endif()
-endif()
-
-if (CMAKE_SYSTEM_PROCESSOR MATCHES "amd64.*|AMD64.*|x86_64.*|X86_64.*")
-		set(ASM_ARCH="-m amd64")
-	if (CMAKE_HOST_SYSTEM_NAME STREQUAL "CYGWIN.*|Windows.*|MSYS.*")
-		set(CMAKE_ASM_NASM_OBJECT_FORMAT win64)
-	elseif (UNIX AND NOT APPLE)
-		set(CMAKE_ASM_NASM_OBJECT_FORMAT elf64)
-	elseif (APPLE)
-		set(CMAKE_ASM_NASM_OBJECT_FORMAT macho64)
-	endif()
-elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "x86.*|i686.*|i386.*")
-	set(ASM_ARCH="-m x86")
-	if (CMAKE_HOST_SYSTEM_NAME STREQUAL "CYGWIN.*|Windows.*|MSYS.*")
-		set(CMAKE_ASM_NASM_OBJECT_FORMAT win32)
-	elseif (UNIX AND NOT APPLE)
-		set(CMAKE_ASM_NASM_OBJECT_FORMAT elf32)
-	endif()
-elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*") # if there are no machine/processor-specific
-	enable_language(C ASM)											# GNU as flags needed, I could make this an 	
-																	# "else"
-	# To do - set any GNU as flags that are needed, presumably as CMAKE_ASM_FLAGS
-endif()
 
 set(SRC_DIR ../ffmpeg)
 set(LIBAVCODEC_SRC_DIR ${SRC_DIR}/libavcodec)
@@ -68,16 +19,12 @@ set(LIBSWSCALE_SRC_DIR ${SRC_DIR}/libswscale)
 
 include(generated_headers.cmake)
 
-# To Do: add some conditionals to not break builds where PIC is not supported, if any
-# Seems to be enabled by default at least on amd64 FreeBSD 15.0, but shouldn't hurt to explicitly request it
-#add_compile_options(-fPIC)
-set(CMAKE_C_FLAGS "-fPIC")
-set(CMAKE_ASM_NASM_FLAGS "-DPIC ${ASM_ARCH} -P ${CMAKE_CURRENT_BINARY_DIR}/config.asm")
+#set(CMAKE_C_FLAGS "-fPIC")
+#string(APPEND CMAKE_C_FLAGS "-fPIC")
 
 # To Do - conditionally apply COMPILER_Flags based on the build target
 
 # Mimic the naming convention of current ppsspp-ffmpeg precompiled libraries and distributed headers
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_HOST_SYSTEM_NAME}/${CMAKE_SYSTEM_PROCESSOR}/lib)
 set(HEADER_INSTALL_DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/../include)
 file(MAKE_DIRECTORY ${HEADER_INSTALL_DIRECTORY})
 
@@ -86,7 +33,7 @@ include(libs/libavcodec.cmake)
 add_library(avcodec STATIC ${LIBAVCODEC_SOURCE_FILES})
 target_precompile_headers(avcodec PRIVATE ${LIBAVUTIL_SRC_DIR}/internal.h ${LIBAVUTIL_SRC_DIR}/intmath.h)
 target_link_libraries(avcodec)
-target_include_directories(avcodec PRIVATE ${SRC_DIR} ${VDPAU_X11_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(avcodec PRIVATE ${SRC_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(avcodec INTERFACE ${LIBAVCODEC_HEADERS})	# expose libavcodec headers to PPSSPP build
 file(COPY ${LIBAVCODEC_HEADERS} DESTINATION ${HEADER_INSTALL_DIRECTORY}/libavcodec) # same, albeit the "old" way
 set(LIBAVCODEC_LIBRARY avcodec)
@@ -163,3 +110,16 @@ if(STRIP_TOOL)
 		COMMENT "Stripping symbols from swscale"
 	)
 endif()
+
+# Make sure to set appropriate options found in PPSSPP's root CMakeLists.txt file at lines 1055-1067
+set(CMAKE_REQUIRED_FLAGS "-pedantic -Wall -Werror -Wno-unused-variable")
+check_cxx_source_compiles("extern \"C\" {
+	#include <libavcodec/avcodec.h>
+	#include <libavformat/avformat.h>
+	}
+	static AVCodecContext *s_codec_context = NULL;
+	int main() {
+		const AVCodec *codec = avcodec_find_encoder(s_codec_context->codec_id);
+		return 0;
+	}
+	" HAVE_LIBAVCODEC_CONST_AVCODEC FAIL_REGEX "invalid conversion")

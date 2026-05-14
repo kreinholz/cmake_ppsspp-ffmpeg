@@ -10,6 +10,14 @@ include(CheckIncludeFile)
 
 include(configure_functions.cmake)
 
+# Backup and remove PPSSPP's compiler flags to enable some of these checks to complete
+set(OLD_CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+set(CMAKE_C_FLAGS "" CACHE STRING "C compiler flags" FORCE)
+set(OLD_CMAKE_CXX_FLAGS "$CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "" CACHE STRING "CXX compiler flags" FORCE)
+set(OLD_CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}")
+set(CMAKE_SHARED_LINKER_FLAGS "")
+
 # Check for extern_prefix
 check_cc(ff_extern "int ff_extern;" HAVE_ff_extern)
 execute_process(
@@ -67,203 +75,12 @@ execute_process(
 string(REGEX REPLACE "\n.*" "" CC_IDENT "${CC_VERSION}")
 set(CC_IDENT \"${CC_IDENT}\")
 
-# Deal with common ARCH aliases (from lines 4027-4072 of ffmpeg's configure script)
-# We should probably just use the CMAKE_SYSTEM_PROCESSOR variable and apply any conditions in configure
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64.*|arm64.*|aarch64.*")
-	set(ARCH "aarch64")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm.*|iPad.*|iPhone.*")
-	set(ARCH "arm")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "mips.*|IP.*")
-	# To Do: configure script at lines 4038-4043 conditionally sets additional CPPFLAGS and LDFLAGS
-	set(ARCH "mips")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "parisc.*|hppa.*")
-	set(ARCH "parisc")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "\"Power Macintosh\".*|ppc.*|powerpc.*")
-	set(ARCH "ppc")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "s390.*|s390x.*")
-	set(ARCH "s390")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "sh4.*|sh.*")
-	set(ARCH "sh4")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "sun4u.*|sparc.*")
-	set(ARCH "sparc")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "tilegx.*|tile-gx.*")
-	set(ARCH "tilegx")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "i386.*|i486.*|i586.*|i686.*|i86pc.*|BePC.*|x86pc.*|x86_64.*|X86_64.*|x86_32.*|amd64.*|AMD64.*|x86.*")
-	set(ARCH "x86")
-else()
-	message(WARNING "unknown architecture ${CMAKE_SYSTEM_PROCESSOR}")
-endif()
-message("SYSTEM PROCESSOR FOUND: ${CMAKE_SYSTEM_PROCESSOR}. Assigning to arch alias ${ARCH}.")
-
-# To Do: lines 3450-3454 set .exe as the exesuf on Windows. However, since I'm using a cmake variable for this, it may be fine...
-
-# Get the CPU name--and fallback to "generic" per line 3034 of ffmpeg's configure script
-check_native(CPU_NAME)
-if (CPU_NAME STREQUAL "")
-	set(CPU_NAME "generic")
-endif()
-message(STATUS "Setting CPU: ${CPU_NAME}")
-
-# To Do: lines 4074-4084 conditionally add cpuflags for march and mcpu for armv.* CPUs
-# Need to store cpuflags, cflags, asflags, and ldflags in variables and add as appropriate
-
-# Get the SUBARCH if on arm and CPU_NAME is set to "generic"--see line 4092 of ffmpeg's configure script
-if (${ARCH} STREQUAL "arm" AND ${CPU_NAME} STREQUAL "generic")
-	probe_arm_arch(SUBARCH)
-endif()
-
-# Set the SUBARCH if on arm and CPU_NAME contains the substring "armv"--see line 4127 of ffmpeg's configure script
-if (${ARCH} STREQUAL "arm" AND ${CPU_NAME} MATCHES "armv")
-	string(TOLOWER "${CPU_NAME}" CPU_LOWERCASE)
-	string(REGEX REPLACE "[^a-z0-9]" "" SUBARCH "${CPU_LOWERCASE}")
-elseif (${ARCH} STREQUAL "arm")
-	if (${CPU_NAME} MATCHES "cortex-a")
-		set(SUBARCH "armv7a")
-	elseif (${CPU_NAME} MATCHES "cortex-r")
-		set(SUBARCH "armv7r")
-	elseif (${CPU_NAME} MATCHES "cortex-m")
-		set(SUBARCH "armv7m")
-		# At line 4134, configure ALSO enables 'thumb'
-	elseif (${CPU_NAME} MATCHES "arm11")
-		set(SUBARCH "armv6")
-	elseif (${CPU_NAME} MATCHES "arm[79]*e*|arm9[24]6*|arm96*|arm102[26]")
-		set(SUBARCH "armv5te")
-	elseif (${CPU_NAME} MATCHES "armv4*|arm7*|arm9[24]*")
-		set(SUBARCH "armv4")
-	else()
-		probe_arm_arch(SUBARCH)
-	endif()
-	# Set some options based on the arm SUBARCH--see line 4143 in ffmpeg's configure script
-	if (${SUBARCH} MATCHES "armv5t*")
-		set(HAVE_FAST_CLZ 1)
-	elseif (${SUBARCH} MATCHES "armv[6-8]*")
-		set(HAVE_FAST_CLZ 1)
-		set(HAVE_FAST_UNALIGNED 1)
-	endif()
-endif()
-
-# Note: skipping avr32 and bfin cpu-specific checks at lines 4151-4174 of ffmpeg's configure script
-
-# MIPS--see line 4176 of ffmpeg's configure script
-if (${ARCH} STREQUAL "mips")
-	if (NOT ${CPU_NAME} STREQUAL "generic")
-		set(HAVE_MIPS32R2 0)
-		set(HAVE_MIPS32R5 0)
-        set(HAVE_MIPS64R2 0)
-        set(HAVE_MIPS32R6 0)
-        set(HAVE_MIPS64R6 0)
-        set(HAVE_LOONGSON2 0)
-        set(HAVE_LOONGSON3 0)
-	endif()
-	if (${CPU_NAME} MATCHES "24kc|24kf*|24kec|34kc|1004kc|24kef*|34kf*|1004kf*|74kc|74kf")
-		set(HAVE_MIPS32R2 1)
-		set(HAVE_MSA 0)
-		# Jump down to line 4232 in ffmpeg's configure script
-		if (${CPU_NAME} MATCHES "24kc")
-			set(HAVE_MIPSFPU 0)
-			set(HAVE_MIPSDSP 0)
-			set(HAVE_MIPSDSPR2 0)
-		elseif (${CPU_NAME} MATCHES "24kf*")
-			set(HAVE_MIPSDSP 0)
-			set(HAVE_MIPSDSPR2 0)
-		elseif (${CPU_NAME} MATCHES "24kec|34kc|1004kc")
-			set(HAVE_MIPSFPU 0)
-			set(HAVE_MIPSDSPR2 0)
-		elseif (${CPU_NAME} MATCHES "74kc")
-			set(HAVE_MIPSFPU 0)
-		endif()
-	elseif (${CPU_NAME} MATCHES "p5600|i6400")
-		set(HAVE_MIPSDSP 0)
-		set(HAVE_MIPSDSPR2 0)
-		# Jump down to line 4251 in ffmpeg's configure script)
-		if (${CPU_NAME} MATCHES "p5600")
-			set(HAVE_MIPS32R5 1)
-			# To Do: add appropriate cpuflags
-		elseif (${CPU_NAME} MATCHES "i6400")
-			set(HAVE_MIPS64R6 1)
-			# To Do: add appropriate cpuflags
-		endif()
-	elseif (${CPU_NAME} MATCHES "loongson*")
-		set(HAVE_LOONGSON2 1)
-		set(HAVE_LOONGSON3 1)
-		set(HAVE_LOCAL_ALIGNED_8 1)
-		set(HAVE_LOCAL_ALIGNED_16 1)
-		set(HAVE_LOCAL_ALIGNED_32 1)
-		set(HAVE_SIMD_ALIGN_16 1)
-		set(HAVE_FAST_64BIT 1)
-		set(HAVE_FAST_CLZ 1)
-		set(HAVE_FAST_CMOV 1)
-		set(HAVE_FAST_UNALIGNED 1)
-		set(HAVE_ALIGNED_STACK 0)
-		# To Do - deal with cpuflags at lines 4208-4216 of configure script
-	else()
-		message(WARNING "Unknown CPU. Disabling all MIPS optimizations")
-		set(HAVE_MIPSFPU 0)
-		set(HAVE_MIPSDSP 0)
-		set(HAVE_MIPSDSPR2 0)
-		set(HAVE_MSA 0)
-		set(HAVE_MMI 0)
-	endif()
-endif()
-
-# Skipping PPC at lines 4265-4324, since PPSSPP is little endian only
-# To Do: should probably revisit this section as little endian PPC exists
-
-# To Do: revisit lines 4326-4335, re SPARC; skipped for now since we're not adding cpuflags yet
-
-# x86 - starting at line 4337 of ffmpeg's configure script
-if (${ARCH} STREQUAL "x86")
-	if (${CPU_NAME} MATCHES "i[345]86|pentium")
-		set(HAVE_I686 0)
-		set(HAVE_MMX 0)
-		# To Do - set appropriate cpuflags
-	elseif (${CPU_NAME} MATCHES "pentium-mmx|k6|k6-[23]|winchip-c6|winchip2|c3")
-		set(HAVE_I686 0)
-	elseif (${CPU_NAME} MATCHES "i686|pentiumpro|pentium[23]|pentium-m|athlon|athlon-tbird|athlon-4|athlon-[mx]p|athlon64*|k8*|opteron*|athlon-fx|core*|atom|bonnell|nehalem|westmere|silvermont|sandybridge|ivybridge|haswell|broadwell|amdfam10|barcelona|b[dt]ver*")
-		set(HAVE_I686 1)
-		set(HAVE_FAST_CMOV 1)
-	elseif (${CPU_NAME} MATCHES "pentium4|pentium4m|prescott|nocona")
-		set(HAVE_I686 1)
-		set(HAVE_FAST_CMOV 0)
-	endif()
-endif()
-
-# To do: lines 4367-4371, adding cflags, asflags, and ldflags based on added cpuflags
-
-# To do: go back and look for more 'enable' and 'disable' lines and assign as appropriate to HAVE_ variables
-
-# Skipping the 2 checks at lines 4389 and 4392 as CPPFLAGS are N/A with cmake. If we need CPPFLAGS, however, we can probably just add these to CFLAGS...
-
-# 64 vs 32-bit subarch checks at lines 4409-4447 of ffmpeg's configure script
-if (${ARCH} MATCHES "aarch64|alpha|ia64")
-	# To do: add spic flag
-elseif (${ARCH} MATCHES "mips")
-	check_64bit(mips mips64 "_MIPS_SIM > 1" MIPS_SUBARCH)
-	if (${MIPS_SUBARCH} STREQUAL "mips64")
-		set(ARCH_MIPS64 1)
-	endif()
-	# To do: add ppc, s390, and sparc conditionals (lines 4421-4432)
-elseif (${ARCH} MATCHES "x86")
-	check_64bit(x86_32 x86_64 "sizeof(void *) > 4" X86_SUBARCH)
-	if (${X86_SUBARCH} STREQUAL "x86_64")
-		set(ARCH_X86_64 1)
-	else()
-		set(ARCH_X86_32 1)
-	endif()
-endif()
-
-# To Do: review lines 4452-4704 for OS-specific flags
-
-# To Do: review lines 4728-4841 for probe_libc function
-
 # Check for PIC - see line 4845 of ffmpeg's configure script
 set(CONFIG_PIC 1)
 check_cpp_condition(pic "stdlib.h" "defined(__PIC__) || defined(__pic__) || defined(PIC)" CONFIG_PIC)
 # FIXME: ffmpeg's configure script gets passing test results on my system--yet this check fails; but it's clearly not defined in stdlib.h so I don't know how it passed with configure!
 # For now, default to "1" since the vast majority of build environments support/require PIC
 # To Do: per lines 4900-4912, add appropriate cflags and asflags (cppflags?) if PIC is enabled
-
-check_cc(inline_asm "void foo(void) { __asm__ volatile (\"\" ::); }" HAVE_INLINE_ASM)
 
 # Line 4933
 check_cc(pragma_deprecated [[void foo(void) { _Pragma("GCC diagnostic ignored \"-Wdeprecated-declarations\"") }]] HAVE_PRAGMA_DEPRECATED)
@@ -273,121 +90,6 @@ check_cc(attribute_packed "struct { int x; } __attribute__((packed)) x;" HAVE_AT
 check_cc(attribute_may_alias "union { int x; } __attribute__((may_alias)) x;" HAVE_ATTRIBUTE_MAY_ALIAS)
 
 # Skipping endian test at lines 4945-4952 since PPSSPP is little endian only
-
-# Note: this check should only work on aarch64, arm, and ppc altivec
-check_gas(gas HAVE_GNU_AS)
-# To Do: might need to add more related to check_gas() function starting at line 4954 of ffmpeg's configure script
-
-# Inline ASM labels
-set(HAVE_INLINE_ASM_LABELS 0)
-check_inline_asm(inline_asm_labels "\"1:\\n\"" HAVE_INLINE_ASM_LABELS)
-set(HAVE_INLINE_ASM_NONLOCAL_LABELS 0)
-check_inline_asm(inline_asm_nonlocal_labels "\"Label:\\n\"" HAVE_INLINE_ASM_NONLOCAL_LABELS)
-
-if (${ARCH} STREQUAL "aarch64")
-	# To Do: fix check_insn() function, implement the checks at lines 5005-5011
-	check_insn(armv8 "prfm   pldl1strm, [x0]" HAVE_ARMV8 HAVE_ARMV8_INLINE HAVE_ARMV8_EXTERNAL)
-	check_insn(neon "ext   v0.8B, v0.8B, v1.8B, #1" HAVE_NEON HAVE_NEON_INLINE HAVE_NEON_EXTERNAL)
-	check_insn(vfp "fmadd d0,    d0,    d1,    d2" HAVE_VFP HAVE_VFP_INLINE HAVE_VFP_EXTERNAL)
-elseif (${ARCH} STREQUAL "arm")
-	if (MSVC)
-		check_cpp_condition(thumb1 "stddef.h" "defined _M_ARMT" CONFIG_THUMB)
-	endif()
-	check_cpp_condition(thumb_defined "stddef.h" "defined __thumb__" THUMB_DEFINED)
-	if (THUMB_DEFINED)
-		check_cc(thumb "float func(float a, float b){ return a+b; }" CONFIG_THUMB)
-	endif()
-	# To Do: line 5025 - check cflags and set appropriately if CONFIG_THUMB is true
-	check_cpp_condition(vfp_args1 "stddef.h" "defined __ARM_PCS_VFP" HAVE_VFP_ARGS)
-	if (NOT HAVE_VFP_ARGS)
-		check_cpp_condition(vfp_args2 "stddef.h" "defined _M_ARM_FP && _M_ARM_FP >= 30" HAVE_VFP_ARGS)
-	endif()
-	# To do: a second if (NOT HAVE_VFP_ARGS), lines 5031-5037, with multiple chained checks
-	check_insn(armv5te "qadd r0, r0, r0" HAVE_ARMV5TE HAVE_ARMV5TE_INLINE HAVE_ARMV5TE_EXTERNAL)
-	check_insn(armv6 "sadd16 r0, r0, r0" HAVE_ARMV6 HAVE_ARMV6_INLINE HAVE_ARMV6_EXTERNAL)
-	check_insn(armv6t2 "movt r0, #0" HAVE_ARMV6T2 HAVE_ARMV6T2_INLINE HAVE_ARMV6T2_EXTERNAL)
-	check_insn(neon "vadd.i16 q0, q0, q0" HAVE_NEON HAVE_NEON_INLINE HAVE_NEON_EXTERNAL)
-	check_insn(vfp "fadds s0, s0, s0" HAVE_VFP HAVE_VFP_INLINE HAVE_VFP_EXTERNAL)
-	check_insn(vfpv3 "vmov.f32 s0, #1.0" HAVE_VFPV3 HAVE_VFPV3_INLINE HAVE_VFPV3_EXTERNAL)
-	check_insn(setend "setend be" HAVE_SETEND HAVE_SETEND_INLINE HAVE_SETEND_EXTERNAL)
-	# Note: The above 7 only get enabled on Linux and Android, per lines 5050-5052
-	check_inline_asm(asm_mod_q "\"add r0, %Q0, %R0\" :: \"r\"((long long)0)\"" HAVE_ASM_MOD_Q)
-    check_as(as_dn_directive "ra .dn d0.i16\n.unreq ra" HAVE_AS_DN_DIRECTIVE)
-	# I don't think I need to worry about lines 5061-5066
-elseif (${ARCH} STREQUAL "mips")	# Technically these checks should only run if HAVE_ LOONGSON2, LOONGSON3, MMI
-	check_inline_asm(loongson2 "\"dmult.g $8, $9, $10\"" HAVE_LOONGSON2_INLINE)
-	check_inline_asm(loongson3 "\"gsldxc1 $f0, 0($2, $3)\"" HAVE_LOONGSON3_INLINE)
-	check_inline_asm(mmi "\"punpcklhw $f0, $f0, $f0\"" HAVE_MMI_INLINE)
-	if (ARCH_MIPS64)	# Again, these checks should conditionally run if HAVE_ MIPS64R6, MIPS64R2, etc.
-		check_inline_asm_flags(mips64r6 "\"dlsa $0, $0, $0, 1\"" HAVE_MIPS64R6_INLINE) # To Do: deal with '-mips64r6' flag if check passes
-		check_inline_asm_flags(mips64r2 "\"dext $0, $0, 0, 1\"" HAVE_MIPS64R2_INLINE)
-		if (NOT HAVE_MIPS64R6 AND NOT HAVE_MIPS64R2)
-			check_inline_asm_flags(mips64r1 "\"daddi $0, $0, 0\"" HAVE_MIPS64R1_INLINE)
-		endif()
-	else()
-		check_inline_asm_flags(mips32r6 "\"aui $0, $0, 0\"" HAVE_MIPS32R6_INLINE)
-		check_inline_asm_flags(mips32r5 "\"eretnc\"" HAVE_MIPS32R5_INLINE)
-		check_inline_asm_flags(mips32r2 "\"ext $0, $0, 0, 1\"" HAVE_MIPS32R2_INLINE)
-		if (NOT HAVE_MIPS32R6 AND NOT HAVE_MIPS32R5 AND NOT HAVE_MIPS32R2)
-			check_inline_asm_flags(mips32r1 "\"addi $0, $0, 0\"" HAVE_MIPS32R1_INLINE)
-		endif()
-	endif()
-	check_inline_asm_flags(mipsfpu "\"cvt.d.l $f0, $f2\"" HAVE_MIPSFPU_INLINE)
-	if (HAVE_MIPSFPU)
-		if (HAVE_MIPS32R6 OR HAVE_MIPS32R6 OR HAVE_MIPS64R6)
-			check_inline_asm_flags(mipsfpu "\"cvt.d.l $f0, $f1\"" HAVE_MIPSFPU_INLINE)
-		elseif (HAVE_MSA)
-			check_inline_asm_flags(msa "\"addvi.b $w0, $w1, 1\"" HAVE_MSA_INLINE1)
-			if (HAVE_MSA_INLINE1)
-				check_header(msa "msa.h" HAVE_MSA_INLINE)
-			endif()
-		endif()
-	endif()
-	if (HAVE_MIPSDSP)
-		check_inline_asm_flags(mipsdsp "\"addu.qb $t0, $t1, $t2\"" HAVE_MIPSDSP_INLINE)
-	endif()
-	if (HAVE_MIPSDSP2)
-		check_inline_asm_flags(mipsdspr2 "\"absq_s.qb $t0, $t1\"" HAVE_MIPSDSP2_INLINE)
-	endif()
-# Note: skipping parisc and ppc, lines 5092-5136
-elseif (${ARCH} STREQUAL "x86")
-	check_builtin(rdtsc "<intrin.h>" "__rdtsc()" HAVE_RDTSC)
-	check_builtin (mm_empty "<mmintrin.h>" "_mm_empty()" HAVE_MM_EMPTY)
-	set(HAVE_LOCAL_ALIGNED_8 1)
-	set(HAVE_LOCAL_ALIGNED_16 1)
-	set(HAVE_LOCAL_ALIGNED_32 1)
-	check_exec_crash(ebp "volatile int i=0\;\n__asm__ volatile (\"xorl %%ebp, %%ebp\" ::: \"%ebp\")\;\nreturn i\;" HAVE_EBP_AVAILABLE)
-	check_inline_asm(ebx_available "\"\"::\"b\"(0)" HAVE_EBX_AVAILABLE1)
-	if (HAVE_EBX_AVAILABLE1)
-		check_inline_asm(ebx_available "\"\":::\"%ebx\"" HAVE_EBX_AVAILABLE)
-	endif()
-	check_inline_asm(xmm_clobbers "\"\":::\"%xmm0\"" HAVE_XMM_CLOBBERS)
-	check_inline_asm(inline_asm_direct_symbol_refs "\"movl '$extern_prefix'test, %eax\"" HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS)
-	if (NOT HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS)
-		check_inline_asm(inline_asm_direct_symbol_refs "\"movl '$extern_prefix'test(%rip), %eax\"" HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS)
-	endif()
-	check_inline_asm(ssse3_inline "\"pabsw %xmm0, %xmm0\"" HAVE_SSSE3_INLINE)
-	check_inline_asm(mmxext_inline "\"pmaxub %mm0, %mm1\"" HAVE_MMXEXT_INLINE)
-	# To Do: set yasm object format if needed--see lines 5173-5180
-	# To Do: set appropriate YASM flags--see lines 5185-5188
-	check_yasm(yasm "movbe ecx, [5]" HAVE_YASM)
-	if (HAVE_YASM)
-		check_yasm(avx2_external "vextracti128 xmm0, ymm0, 0" HAVE_AVX2_EXTERNAL)
-		check_yasm(xop_external "vpmacsdd xmm0, xmm1, xmm2, xmm3" HAVE_XOP_EXTERNAL)
-		check_yasm(fma4_external "vfmaddps ymm0, ymm1, ymm2, ymm3" HAVE_FMA4_EXTERNAL)
-		check_yasm(cpunop "CPU amdnop" HAVE_CPUNOP_EXTERNAL)	# This check fails with configure but passes here!
-	endif()
-	if (${CPU_NAME} MATCHES "athlon*|opteron*|k8*|pentium|pentium-mmx|prescott|nocona|atom|geode")
-		set(HAVE_FAST_CLZ 0)
-	else()
-		set(HAVE_FAST_CLZ 1)
-	endif()
-endif()
-
-# Line 5207
-check_code(intrinsics_neon cc "<arm_neon.h>" "int16x8_t test = vdupq_n_s16(0)" HAVE_INTRINSICS_NEON)
-
-# To Do: implement check_ld_flags, only if needed. See lines 5209-5210
 
 # Note: modifying check_func dlopen test as we don't need decklink, frei0r, ladspa, or nvenc
 check_func(dlopen "dlopen" HAVE_DLOPEN)	# Note: we could modify check_func to allow a shared lib arg vice passing ""
@@ -467,7 +169,7 @@ check_func_headers(glob "<glob.h>" "glob" "" HAVE_GLOB)
 # Xlib check at lines 5330-5331
 string(APPEND CMAKE_C_FLAGS "-I${X11_Xlib_INCLUDE_PATH}")
 string(APPEND CMAKE_CXX_FLAGS "-I${X11_Xlib_INCLUDE_PATH}")	# Note: needed for check_header to find XvMClib
-string(APPEND CMAKE_EXE_LINKER_FLAGS "-L/usr/local/lib")
+string(APPEND CMAKE_SHARED_LINKER_FLAGS "-L/usr/local/lib")
 check_func_headers(xlib "<X11/Xlib.h>;<X11/extensions/Xvlib.h>" "XvGetPortAttribute" "-lXv;-lX11;-lXext" CONFIG_XLIB)
 # To Do: handle appending of CMAKE_C_FLAGS and CMAKE_EXE_LINKER_FLAGS in a more elegant manner (although this might also serve as a model for adding compiler and linker flags in a similar way to ffmpeg's configure script throughout)
 
@@ -478,7 +180,7 @@ check_header(d3d11 "d3d11.h" HAVE_D3D11_H)
 check_header(dxva "dxva.h" HAVE_DXVA_H)
 check_header(dxva2api "dxva2api.h" HAVE_DXVA2API_H)	# -D_WIN32_WINNT=0x0600
 check_header(io "io.h" HAVE_IO_H)
-check_header(libcrystalhd_if "libcrystalhd/libcrystalhd_if.h" CONFIG_LIBCRYSTALHD)	# disabled so unnecessary check
+#check_header(libcrystalhd_if "libcrystalhd/libcrystalhd_if.h" CONFIG_LIBCRYSTALHD)	# disabled so unnecessary check
 check_header(mach_time "mach/mach_time.h" HAVE_MACH_MACH_TIME_H)
 check_header(malloc "malloc.h" HAVE_MALLOC_H)
 check_header(udplite "net/udplite.h" HAVE_UDPLITE_H)
@@ -492,13 +194,6 @@ check_header(un "sys/un.h" HAVE_SYS_UN_H)
 check_header(termios "sys/termios.h" HAVE_TERMIOS_H)
 check_header(unistd "sys/unistd.h" HAVE_UNISTD_H)
 check_header(valgrind "valgrind/valgrind.h" HAVE_VALGRIND_VALGRIND_H)
-check_header(vdpau "vdpau/vdpau.h" CONFIG_VDPAU)	# But should we? Line 5773 check seems more definitive
-check_header(vdpau_x11 "vdpau/vdpau_x11.h" HAVE_VDPAU_X11)
-check_header(VDADecoder "VideoDecodeAcceleration/VDADecoder.h" CONFIG_VDA)	# disabled so unnecessary check
-check_header(VideoToolbox "VideoToolbox/VideoToolbox.h" CONFIG_VIDEOTOOLBOX) # disabled so unnecessary check
-# Note: we already checked for windows.h header above so skipping here
-check_header(XvMClib "X11/extensions/XvMClib.h" CONFIG_XVMC)	# Note: check fails due to compiler error!
-check_header(types "asm/types.h" HAVE_ASM_TYPES_H)
 
 # Line 5362
 check_lib2(commandlinetoargvw "<windows.h>;<shellapi.h>" "CommandLineToArgvW" "-shell32" HAVE_COMMANDLINETOARGVW)
@@ -556,7 +251,7 @@ check_lib2(bz2_bzlibversion "<bzlib.h>" "BZ2_bzlibVersion" "-lbz2" CONFIG_BZLIB)
 check_lib2(lzma_version_number "<lzma.h>" "lzma_version_number" "-llzma" CONFIG_LZMA)
 # To Do: add appropriate external libs if the above checks pass; or do we want to disable some/all of the above?
 
-check_lib2(sin "<math.h>" "sin" "-lm" WHY)
+check_lib2(sin "<math.h>" "sin" "-lm" SIN)
 # To Do: this check doesn't set any variables, but seems to add an alias "-lm" for LIBM
 check_lib2(dtscrystalhdversion "<libcrystalhd/libcrystalhd_if.h>" "DtsCrystalHDVersion" "-lcrystalhd" CONFIG_CRYSTALHD)
 
@@ -580,6 +275,8 @@ check_type(ibasefilter "<dshow.h>" "IBaseFilter" CONFIG_DSHOW_INDEV)	# Note: not
 
 # Note: skipping lines 5684-5691 as I don't believe we need/want any of these
 
+# sndio is third-party at least on FreeBSD, so we can't just search the base includes dir
+string(APPEND CMAKE_C_FLAGS "-I/usr/local/include")
 check_header(sndio "sndio.h" HAVE_SNDIO_H)
 check_struct(audio_buf_info "<sys/soundcard.h>" "audio_buf_info bytes;" "audio_buf_info bytes" HAVE_SYS_SOUNDCARD_H)
 if (NOT HAVE_SYS_SOUNDCARD_H)
@@ -589,47 +286,15 @@ if (NOT HAVE_SYS_SOUNDCARD_H)
 endif()
 check_header(soundcard "soundcard.h" HAVE_SOUNDCARD_H)
 
-# Note: skipping more checks since we disabled those features for ppsspp-ffmpeg
-
 # Xlib: see lines 5718-5719
-check_lib2(xopendisplay "<X11/Xlib.h>" "XOpenDisplay" "-lX11" HAVE_XLIB)
-
-# Note: skipping lines 5721-5745 for now; find_package(X11) should've already located xcb; we could write an alternate
-# check to make sure its header is found here or the like
+# NOTE: unsetting PPSSPP's compiler flags and then trying to set just what we need for these ffmpeg configure script-derived checks is fragile. If the CONFIG_XLIB check passsed, this should too, so just set it
+#check_lib2(xopendisplay "<X11/Xlib.h>" "XOpenDisplay" "-lX11" HAVE_XLIB)
+if (CONFIG_XLIB)
+	set(HAVE_XLIB 1)
+endif()
 
 # dxva2api_h - see line 5755
 check_cc(dxva2api_cobj "#define _WIN32_WINNT 0x0600\n#define COBJMACROS\n#include <windows.h>\n#include <d3d9.h>\n#include <dxva2api.h>\nint main(void) { IDirectXVideoDecoder *o = NULL; IDirectXVideoDecoder_Release(o); return 0; }" HAVE_DXVA2API_COBJ)
-
-# VAAPI - see line 5765
-string(APPEND CMAKE_C_FLAGS "-I${VAAPI_X11_INCLUDE_PATH}")
-check_lib2(vaapi "<va/va.h>" "vaInitialize" "-lva" CONFIG_VAAPI) # To Do: fix include paths--/usr/local
-if (CONFIG_VAAPI AND HAVE_XLIB)
-	check_lib2(vaapi_x11 "<va/va.h>;<va/va_x11.h>" "vaGetDisplay" "-lva;-lva-x11" HAVE_VAAPI_X11)
-endif()
-# FIXME: above check fails due to failure to search /usr/local/include
-check_cpp_condition(vdp_decoder_profile "vdpau/vdpau.h" "defined VDP_DECODER_PROFILE_MPEG4_PART2_ASP" CONFIG_VDPAU)
-if (CONFIG_VDPAU AND HAVE_XLIB)
-	check_func_headers(vdp_device_create_x11 "<vdpau/vdpau.h>;<vdpau/vdpau_x11.h>" "vdp_device_create_x11" "-lvdpau" HAVE_VDPAU_X11)
-endif()
-
-# To Do: lots of flags-related checks on lines 5787-5855
-
-# symver_asm_label - see line 5857
-#check_cc(symver_asm_label [[void ff_foo(void) __asm__ ("av_foo@VERSION");
-#void ff_foo(void) { ${inline_asm+__asm__($quotes);} }]] HAVE_SYMVER_ASM_LABEL)	# FIXME: this fails but should pass
-# Replacement source code to check for symver_asm_label, inspired by Copilot suggestion
-check_cc(symver_asm_label [[void ff_foo(void) {}
-__asm__(".symver ff_foo, ff_foo@VERSION");]] HAVE_SYMVER_ASM_LABEL)
-
-check_cc(symver_gnu_asm [[__asm__(".symver ff_foo,av_foo@VERSION");
-void ff_foo(void) {}]] HAVE_SYMVER_GNU_ASM)
-
-# Enable symver if either of the above checks passes - see line 2227 of configure script
-if (HAVE_SYMVER_ASM_LABEL OR HAVE_SYMVER_GNU_ASM)
-	set(HAVE_SYMVER 1)
-endif()
-
-# To do: more skipped flags checks
 
 # Threads - see line 6045
 if (HAVE_SYNC_VAL_COMPARE_AND_SWAP OR HAVE_ATOMIC_COMPARE_EXCHANGE)
@@ -646,125 +311,11 @@ if (HAVE_PTHREADS OR HAVE_OS2THREADS OR HAVE_W32THREADS)
 	set(HAVE_THREADS 1)
 endif()
 
-
-# Set some more architecture-related defaults. See lines 2220-2228 of configure script
-# FIXME: These aren't working--I think it might be interpreting these as string literals
-if (${ARCH} MATCHES "aarch64|x86")
-	set(HAVE_ALIGNED_STACK 1)
-endif()
-if (${ARCH} MATCHES "aarch64|alpha|ia64|mips64|parisc64|ppc64|sparc64" OR ARCH_X86_64)
-	set(HAVE_FAST_64BIT 1)
-endif()
-if (${ARCH} MATCHES "aarch64|alpha|avr32|mips|ppc|x86")
-	set(HAVE_FAST_CLZ 1)
-endif()
-if (${ARCH} MATCHES "aarch64|ppc|x86")
-	set(HAVE_FAST_UNALIGNED 1)
-endif()
-
-# It seems ffmpeg's configure script just enables a slew of CPU-related features without actually checking for them--possibly due to enabling of runtime cpu detection by default
-
-# FIXME: this is the wrong way to do this. ffmpeg's configure script enables a bunch of features by default, but then DISABLES them if applicable checks fail. I need to reorder this AND implement disabling of features that are enabled by default in the event of a failed check
-
-# x86 features - see line 6164 in configure script
-if (${ARCH} STREQUAL "x86")
-	set(HAVE_MMX 1)
-	set(HAVE_MMXEXT 1)
-	set(HAVE_AMD3DNOW 1)
-	set(HAVE_AMD3DNOWEXT 1)
-	set(HAVE_SSE 1)
-	set(HAVE_SSSE3 1)
-	set(HAVE_AESNI 1)
-	set(HAVE_AVX 1)
-	set(HAVE_XOP 1)
-	set(HAVE_FMA3 1)
-	set(HAVE_FMA4 1)
-	set(HAVE_I686 1)
-	set(HAVE_FAST_CMOV 1)
-	set(HAVE_EBX_AVAILABLE 1)
-	set(HAVE_EBP_AVAILABLE 1)
-endif()
-# aarch64 features - see line 6182 in configure script
-if (${ARCH} STREQUAL "aarch64")
-	set(HAVE_NEON 1)
-	set(HAVE_VFP 1)
-endif()
-# arm features - see line 6186 in configure script
-if (${ARCH} STREQUAL "arm")
-	set(HAVE_ARMV5TE 1)
-	set(HAVE_ARMV6 1)
-	set(HAVE_ARMV6T2 1)
-	set(HAVE_VFP 1)
-	set(HAVE_NEON 1)
-	set(HAVE_THUMB 1)
-endif()
-# mips features - see line 6194 in configure script
-if (${ARCH} STREQUAL "mips")
-	set(HAVE_MIPSFPU 1)
-	set(HAVE_MIPSDSP 1)
-	set(HAVE_MIPSDSPR2 1)
-	set(HAVE_MSA 1)
-	set(HAVE_MMI 1)
-endif()
-
-# Architecture extensions - see lines 2155-2211
-if (${ARCH} STREQUAL "aarch64")
-	set(HAVE_ARMV8 1)
-endif()
-if (HAVE_VFP)
-	set(HAVE_VFPV3 1)
-endif()
-if (${ARCH} STREQUAL "aarch64")
-	set(HAVE_SETEND 1)
-endif()
-# Note: I skipped the 5 mips arch-specific _deps because we already conditionally set these above
-# Skipped ppc as well
-
-# Continuing from line 2187
-if (HAVE_I686)
-	set(HAVE_CPUNOP 1)
-endif()
-
-if (HAVE_SSE)
-	set(HAVE_SSE2 1)
-	set(HAVE_SSE3 1)
-	set(HAVE_SSE4 1)
-	set(HAVE_SSE42 1)
-	set(HAVE_AVX2 1)
-endif()
-
-# cpunop and i686, if enabled, cause their _external counterparts to be enabled - see lines 1665-1674 for arm, 1676-1686 for mips, 1688-1692 for loongson, and 1722-1726 for x86
-# But note, we don't want to enable these unless we have an appropriate Assembler--yasm in the case of x86 for externals
-if (HAVE_YASM)
-	if (HAVE_CPUNOP)
-		set(HAVE_CPUNOP_EXTERNAL 1)
-	endif()
-	if (HAVE_I686)
-		set(HAVE_I686_EXTERNAL 1)
-	endif()
-endif()
-# To do: arm, mips, and loongson _externals
-
-# enable _inline counterparts, only if we have inline_asm
-if (HAVE_INLINE_ASM AND ${ARCH} STREQUAL "x86")
-	set(ARCH_EXT_LIST_X86_SIMD "HAVE_AESNI;HAVE_AMD3DNOW;HAVE_AMD3DNOWEXT;HAVE_AVX;HAVE_AVX2;HAVE_FMA3;HAVE_FMA4;HAVE_MMX;HAVE_MMXEXT;HAVE_SSE;HAVE_SSE2;HAVE_SSE3;HAVE_SSE4;HAVE_SSE42;HAVE_SSSE3;HAVE_XOP")
-	foreach(feature IN LISTS ARCH_EXT_LIST_X86_SIMD)
-		if (${feature})
-			set(${feature}_INLINE 1)
-			set(${feature}_EXTERNAL 1)
-		endif()
-	endforeach()
-endif()
-
-if (HAVE_ALTIVEC OR HAVE_NEON OR HAVE_SSE)
-	set(HAVE_SIMD_ALIGN_16 1)
-endif()
-
-# To Do: map 'eval ${v}_inline_deps=inline_asm' $ARCH_EXT_LIST_ARM
-
-
 # Backup/second test for flt_lim, see lines 4836-4837
 check_code(flt_lim cc "<float.h>;<limits.h>" "char c[2 * !!(DBL_MAX == (double)DBL_MAX) - 1]" HAVE_FLT_LIM)
+
+# To Do: need to disable by setting to "0" features associated with checks that fail, such as CPUNOP_EXTERNAL on my system. For now:
+set(HAVE_CPUNOP_EXTERNAL 0)
 
 # Run convenience function to set "0" for any variables not set to "1"
 set(settings-list "ARCH_AARCH64;ARCH_ALPHA;ARCH_AMD64;ARCH_ARM;ARCH_AVR32;ARCH_AVR32_AP;ARCH_AVR32_UC;ARCH_BFIN;ARCH_IA64;ARCH_M68K;ARCH_MIPS;ARCH_MIPS64;ARCH_PARISC;ARCH_PPC;ARCH_PPC64;ARCH_S390;ARCH_SH4;ARCH_SPARC;ARCH_SPARC64;ARCH_TILEGX;ARCH_TILEPRO;ARCH_TOMI;ARCH_X86;ARCH_X86_32;ARCH_X86_64;HAVE_ARMV5TE;HAVE_ARMV6;HAVE_ARMV6T2;HAVE_ARMV8;HAVE_NEON;HAVE_VFP;HAVE_VFPV3;HAVE_SETEND;HAVE_ALTIVEC;HAVE_DCBZL;HAVE_LDBRX;HAVE_POWER8;HAVE_PPC4XX;HAVE_VSX;HAVE_AESNI;HAVE_AMD3DNOW;HAVE_AMD3DNOWEXT;HAVE_AVX;HAVE_AVX2;HAVE_FMA3;HAVE_FMA4;HAVE_MMX;HAVE_MMXEXT;HAVE_SSE;HAVE_SSE2;HAVE_SSE3;HAVE_SSE4;HAVE_SSE42;HAVE_SSSE3;HAVE_XOP;HAVE_CPUNOP;HAVE_I686;HAVE_MIPSFPU;HAVE_MIPS32R2;HAVE_MIPS32R5;HAVE_MIPS64R2;HAVE_MIPS32R6;HAVE_MIPS64R6;HAVE_MIPSDSP;HAVE_MIPSDSPR2;HAVE_MSA;HAVE_LOONGSON2;HAVE_LOONGSON3;HAVE_MMI;HAVE_ARMV5TE_EXTERNAL;HAVE_ARMV6_EXTERNAL;HAVE_ARMV6T2_EXTERNAL;HAVE_ARMV8_EXTERNAL;HAVE_NEON_EXTERNAL;HAVE_VFP_EXTERNAL;HAVE_VFPV3_EXTERNAL;HAVE_SETEND_EXTERNAL;HAVE_ALTIVEC_EXTERNAL;HAVE_DCBZL_EXTERNAL;HAVE_LDBRX_EXTERNAL;HAVE_POWER8_EXTERNAL;HAVE_PPC4XX_EXTERNAL;HAVE_VSX_EXTERNAL;HAVE_AESNI_EXTERNAL;HAVE_AMD3DNOW_EXTERNAL;HAVE_AMD3DNOWEXT_EXTERNAL;HAVE_AVX_EXTERNAL;HAVE_AVX2_EXTERNAL;HAVE_FMA3_EXTERNAL;HAVE_FMA4_EXTERNAL;HAVE_MMX_EXTERNAL;HAVE_MMXEXT_EXTERNAL;HAVE_SSE_EXTERNAL;HAVE_SSE2_EXTERNAL;HAVE_SSE3_EXTERNAL;HAVE_SSE4_EXTERNAL;HAVE_SSE42_EXTERNAL;HAVE_SSSE3_EXTERNAL;HAVE_XOP_EXTERNAL;HAVE_CPUNOP_EXTERNAL;HAVE_I686_EXTERNAL;HAVE_MIPSFPU_EXTERNAL;HAVE_MIPS32R2_EXTERNAL;HAVE_MIPS32R5_EXTERNAL;HAVE_MIPS64R2_EXTERNAL;HAVE_MIPS32R6_EXTERNAL;HAVE_MIPS64R6_EXTERNAL;HAVE_MIPSDSP_EXTERNAL;HAVE_MIPSDSPR2_EXTERNAL;HAVE_MSA_EXTERNAL;HAVE_LOONGSON2_EXTERNAL;HAVE_LOONGSON3_EXTERNAL;HAVE_MMI_EXTERNAL;HAVE_ARMV5TE_INLINE;HAVE_ARMV6_INLINE;HAVE_ARMV6T2_INLINE;HAVE_ARMV8_INLINE;HAVE_NEON_INLINE;HAVE_VFP_INLINE;HAVE_VFPV3_INLINE;HAVE_SETEND_INLINE;HAVE_ALTIVEC_INLINE;HAVE_DCBZL_INLINE;HAVE_LDBRX_INLINE;HAVE_POWER8_INLINE;HAVE_PPC4XX_INLINE;HAVE_VSX_INLINE;HAVE_AESNI_INLINE;HAVE_AMD3DNOW_INLINE;HAVE_AMD3DNOWEXT_INLINE;HAVE_AVX_INLINE;HAVE_AVX2_INLINE;HAVE_FMA3_INLINE;HAVE_FMA4_INLINE;HAVE_MMX_INLINE;HAVE_MMXEXT_INLINE;HAVE_SSE_INLINE;HAVE_SSE2_INLINE;HAVE_SSE3_INLINE;HAVE_SSE4_INLINE;HAVE_SSE42_INLINE;HAVE_SSSE3_INLINE;HAVE_XOP_INLINE;HAVE_CPUNOP_INLINE;HAVE_I686_INLINE;HAVE_MIPSFPU_INLINE;HAVE_MIPS32R2_INLINE;HAVE_MIPS32R5_INLINE;HAVE_MIPS64R2_INLINE;HAVE_MIPS32R6_INLINE;HAVE_MIPS64R6_INLINE;HAVE_MIPSDSP_INLINE;HAVE_MIPSDSPR2_INLINE;HAVE_MSA_INLINE;HAVE_LOONGSON2_INLINE;HAVE_LOONGSON3_INLINE;HAVE_MMI_INLINE;HAVE_ALIGNED_STACK;HAVE_FAST_64BIT;HAVE_FAST_CLZ;HAVE_FAST_CMOV;HAVE_LOCAL_ALIGNED_8;HAVE_LOCAL_ALIGNED_16;HAVE_LOCAL_ALIGNED_32;HAVE_SIMD_ALIGN_16;HAVE_ATOMICS_GCC;HAVE_ATOMICS_SUNCC;HAVE_ATOMICS_WIN32;HAVE_ATOMIC_CAS_PTR;HAVE_ATOMIC_COMPARE_EXCHANGE;HAVE_MACHINE_RW_BARRIER;HAVE_MEMORYBARRIER;HAVE_MM_EMPTY;HAVE_RDTSC;HAVE_SARESTART;HAVE_SYNC_VAL_COMPARE_AND_SWAP;HAVE_CABS;HAVE_CEXP;HAVE_INLINE_ASM;HAVE_SYMVER;HAVE_YASM;HAVE_BIGENDIAN;HAVE_FAST_UNALIGNED;HAVE_INCOMPATIBLE_LIBAV_ABI;HAVE_ALSA_ASOUNDLIB_H;HAVE_ALTIVEC_H;HAVE_ARPA_INET_H;HAVE_ASM_TYPES_H;HAVE_CDIO_PARANOIA_H;HAVE_CDIO_PARANOIA_PARANOIA_H;HAVE_DEV_BKTR_IOCTL_BT848_H;HAVE_DEV_BKTR_IOCTL_METEOR_H;HAVE_DEV_IC_BT8XX_H;HAVE_DEV_VIDEO_BKTR_IOCTL_BT848_H;HAVE_DEV_VIDEO_METEOR_IOCTL_METEOR_H;HAVE_DIRECT_H;HAVE_DIRENT_H;HAVE_DLFCN_H;HAVE_D3D11_H;HAVE_DXVA_H;HAVE_ES2_GL_H;HAVE_GSM_H;HAVE_IO_H;HAVE_MACH_MACH_TIME_H;HAVE_MACHINE_IOCTL_BT848_H;HAVE_MACHINE_IOCTL_METEOR_H;HAVE_MALLOC_H;HAVE_OPENCV2_CORE_CORE_C_H;HAVE_OPENJPEG_2_1_OPENJPEG_H;HAVE_OPENJPEG_2_0_OPENJPEG_H;HAVE_OPENJPEG_1_5_OPENJPEG_H;HAVE_OPENGL_GL3_H;HAVE_POLL_H;HAVE_SNDIO_H;HAVE_SOUNDCARD_H;HAVE_SYS_MMAN_H;HAVE_SYS_PARAM_H;HAVE_SYS_RESOURCE_H;HAVE_SYS_SELECT_H;HAVE_SYS_SOUNDCARD_H;HAVE_SYS_TIME_H;HAVE_SYS_UN_H;HAVE_SYS_VIDEOIO_H;HAVE_TERMIOS_H;HAVE_UDPLITE_H;HAVE_UNISTD_H;HAVE_VALGRIND_VALGRIND_H;HAVE_WINDOWS_H;HAVE_WINSOCK2_H;HAVE_INTRINSICS_NEON;HAVE_ATANF;HAVE_ATAN2F;HAVE_CBRT;HAVE_CBRTF;HAVE_COPYSIGN;HAVE_COSF;HAVE_ERF;HAVE_EXP2;HAVE_EXP2F;HAVE_EXPF;HAVE_HYPOT;HAVE_ISFINITE;HAVE_ISINF;HAVE_ISNAN;HAVE_LDEXPF;HAVE_LLRINT;HAVE_LLRINTF;HAVE_LOG2;HAVE_LOG2F;HAVE_LOG10F;HAVE_LRINT;HAVE_LRINTF;HAVE_POWF;HAVE_RINT;HAVE_ROUND;HAVE_ROUNDF;HAVE_SINF;HAVE_TRUNC;HAVE_TRUNCF;HAVE_ACCESS;HAVE_ALIGNED_MALLOC;HAVE_ARC4RANDOM;HAVE_CLOCK_GETTIME;HAVE_CLOSESOCKET;HAVE_COMMANDLINETOARGVW;HAVE_COTASKMEMFREE;HAVE_CRYPTGENRANDOM;HAVE_DLOPEN;HAVE_FCNTL;HAVE_FLT_LIM;HAVE_FORK;HAVE_GETADDRINFO;HAVE_GETHRTIME;HAVE_GETOPT;HAVE_GETPROCESSAFFINITYMASK;HAVE_GETPROCESSMEMORYINFO;HAVE_GETPROCESSTIMES;HAVE_GETRUSAGE;HAVE_GETSYSTEMTIMEASFILETIME;HAVE_GETTIMEOFDAY;HAVE_GLOB;HAVE_GLXGETPROCADDRESS;HAVE_GMTIME_R;HAVE_INET_ATON;HAVE_ISATTY;HAVE_JACK_PORT_GET_LATENCY_RANGE;HAVE_KBHIT;HAVE_LOCALTIME_R;HAVE_LSTAT;HAVE_LZO1X_999_COMPRESS;HAVE_MACH_ABSOLUTE_TIME;HAVE_MAPVIEWOFFILE;HAVE_MEMALIGN;HAVE_MKSTEMP;HAVE_MMAP;HAVE_MPROTECT;HAVE_NANOSLEEP;HAVE_PEEKNAMEDPIPE;HAVE_POSIX_MEMALIGN;HAVE_PTHREAD_CANCEL;HAVE_SCHED_GETAFFINITY;HAVE_SETCONSOLETEXTATTRIBUTE;HAVE_SETCONSOLECTRLHANDLER;HAVE_SETMODE;HAVE_SETRLIMIT;HAVE_SLEEP;HAVE_STRERROR_R;HAVE_SYSCONF;HAVE_SYSCTL;HAVE_USLEEP;HAVE_UTGETOSTYPEFROMSTRING;HAVE_VIRTUALALLOC;HAVE_WGLGETPROCADDRESS;HAVE_PTHREADS;HAVE_OS2THREADS;HAVE_W32THREADS;HAVE_AS_DN_DIRECTIVE;HAVE_AS_FUNC;HAVE_AS_OBJECT_ARCH;HAVE_ASM_MOD_Q;HAVE_ATTRIBUTE_MAY_ALIAS;HAVE_ATTRIBUTE_PACKED;HAVE_EBP_AVAILABLE;HAVE_EBX_AVAILABLE;HAVE_GNU_AS;HAVE_GNU_WINDRES;HAVE_IBM_ASM;HAVE_INLINE_ASM_DIRECT_SYMBOL_REFS;HAVE_INLINE_ASM_LABELS;HAVE_INLINE_ASM_NONLOCAL_LABELS;HAVE_PRAGMA_DEPRECATED;HAVE_RSYNC_CONTIMEOUT;HAVE_SYMVER_ASM_LABEL;HAVE_SYMVER_GNU_ASM;HAVE_VFP_ARGS;HAVE_XFORM_ASM;HAVE_XMM_CLOBBERS;HAVE_CONDITION_VARIABLE_PTR;HAVE_SOCKLEN_T;HAVE_STRUCT_ADDRINFO;HAVE_STRUCT_GROUP_SOURCE_REQ;HAVE_STRUCT_IP_MREQ_SOURCE;HAVE_STRUCT_IPV6_MREQ;HAVE_STRUCT_POLLFD;HAVE_STRUCT_RUSAGE_RU_MAXRSS;HAVE_STRUCT_SCTP_EVENT_SUBSCRIBE;HAVE_STRUCT_SOCKADDR_IN6;HAVE_STRUCT_SOCKADDR_SA_LEN;HAVE_STRUCT_SOCKADDR_STORAGE;HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC;HAVE_STRUCT_V4L2_FRMIVALENUM_DISCRETE;HAVE_ATOMICS_NATIVE;HAVE_DOS_PATHS;HAVE_DXVA2_LIB;HAVE_DXVA2API_COBJ;HAVE_LIBC_MSVCRT;HAVE_LIBDC1394_1;HAVE_LIBDC1394_2;HAVE_MAKEINFO;HAVE_MAKEINFO_HTML;HAVE_PERL;HAVE_POD2MAN;HAVE_SDL;HAVE_SECTION_DATA_REL_RO;HAVE_TEXI2HTML;HAVE_THREADS;HAVE_VAAPI_X11;HAVE_VDPAU_X11;HAVE_WINRT;HAVE_XLIB;CONFIG_BSFS;CONFIG_DECODERS;CONFIG_ENCODERS;CONFIG_HWACCELS;CONFIG_PARSERS;CONFIG_INDEVS;CONFIG_OUTDEVS;CONFIG_FILTERS;CONFIG_DEMUXERS;CONFIG_MUXERS;CONFIG_PROTOCOLS;CONFIG_DOC;CONFIG_HTMLPAGES;CONFIG_MANPAGES;CONFIG_PODPAGES;CONFIG_TXTPAGES;CONFIG_AVIO_READING_EXAMPLE;CONFIG_AVIO_DIR_CMD_EXAMPLE;CONFIG_DECODING_ENCODING_EXAMPLE;CONFIG_DEMUXING_DECODING_EXAMPLE;CONFIG_EXTRACT_MVS_EXAMPLE;CONFIG_FILTER_AUDIO_EXAMPLE;CONFIG_FILTERING_AUDIO_EXAMPLE;CONFIG_FILTERING_VIDEO_EXAMPLE;CONFIG_METADATA_EXAMPLE;CONFIG_MUXING_EXAMPLE;CONFIG_QSVDEC_EXAMPLE;CONFIG_REMUXING_EXAMPLE;CONFIG_RESAMPLING_AUDIO_EXAMPLE;CONFIG_SCALING_VIDEO_EXAMPLE;CONFIG_TRANSCODE_AAC_EXAMPLE;CONFIG_TRANSCODING_EXAMPLE;CONFIG_AVISYNTH;CONFIG_BZLIB;CONFIG_CHROMAPRINT;CONFIG_CRYSTALHD;CONFIG_DECKLINK;CONFIG_FREI0R;CONFIG_GCRYPT;CONFIG_GMP;CONFIG_GNUTLS;CONFIG_ICONV;CONFIG_LADSPA;CONFIG_LIBASS;CONFIG_LIBBLURAY;CONFIG_LIBBS2B;CONFIG_LIBCACA;CONFIG_LIBCDIO;CONFIG_LIBCELT;CONFIG_LIBDC1394;CONFIG_LIBDCADEC;CONFIG_LIBFAAC;CONFIG_LIBFDK_AAC;CONFIG_LIBFLITE;CONFIG_LIBFONTCONFIG;CONFIG_LIBFREETYPE;CONFIG_LIBFRIBIDI;CONFIG_LIBGME;CONFIG_LIBGSM;CONFIG_LIBIEC61883;CONFIG_LIBILBC;CONFIG_LIBKVAZAAR;CONFIG_LIBMFX;CONFIG_LIBMODPLUG;CONFIG_LIBMP3LAME;CONFIG_LIBNUT;CONFIG_LIBOPENCORE_AMRNB;CONFIG_LIBOPENCORE_AMRWB;CONFIG_LIBOPENCV;CONFIG_LIBOPENH264;CONFIG_LIBOPENJPEG;CONFIG_LIBOPUS;CONFIG_LIBPULSE;CONFIG_LIBRTMP;CONFIG_LIBRUBBERBAND;CONFIG_LIBSCHROEDINGER;CONFIG_LIBSHINE;CONFIG_LIBSMBCLIENT;CONFIG_LIBSNAPPY;CONFIG_LIBSOXR;CONFIG_LIBSPEEX;CONFIG_LIBSSH;CONFIG_LIBTESSERACT;CONFIG_LIBTHEORA;CONFIG_LIBTWOLAME;CONFIG_LIBUTVIDEO;CONFIG_LIBV4L2;CONFIG_LIBVIDSTAB;CONFIG_LIBVO_AMRWBENC;CONFIG_LIBVORBIS;CONFIG_LIBVPX;CONFIG_LIBWAVPACK;CONFIG_LIBWEBP;CONFIG_LIBX264;CONFIG_LIBX265;CONFIG_LIBXAVS;CONFIG_LIBXCB;CONFIG_LIBXCB_SHM;CONFIG_LIBXCB_SHAPE;CONFIG_LIBXCB_XFIXES;CONFIG_LIBXVID;CONFIG_LIBZIMG;CONFIG_LIBZMQ;CONFIG_LIBZVBI;CONFIG_LZMA;CONFIG_MMAL;CONFIG_NETCDF;CONFIG_NVENC;CONFIG_OPENAL;CONFIG_OPENCL;CONFIG_OPENGL;CONFIG_OPENSSL;CONFIG_SCHANNEL;CONFIG_SDL;CONFIG_SECURETRANSPORT;CONFIG_X11GRAB;CONFIG_XLIB;CONFIG_ZLIB;CONFIG_FTRAPV;CONFIG_GRAY;CONFIG_HARDCODED_TABLES;CONFIG_RUNTIME_CPUDETECT;CONFIG_SAFE_BITSTREAM_READER;CONFIG_SHARED;CONFIG_SMALL;CONFIG_STATIC;CONFIG_SWSCALE_ALPHA;CONFIG_D3D11VA;CONFIG_DXVA2;CONFIG_VAAPI;CONFIG_VDA;CONFIG_VDPAU;CONFIG_XVMC")
@@ -773,6 +324,10 @@ foreach(option IN LISTS settings-list)
 	set_disabled_to_zero(${option})
 endforeach()
 
+# Restore PPSSPP's original compiler flags
+set(CMAKE_C_FLAGS "${OLD_CMAKE_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${OLD_CMAKE_CXX_FLAGS}")
+set(CMAKE_SHARED_LINKER_FLAGS "${OLD_CMAKE_SHARED_LINKER_FLAGS}")
 
 file(CONFIGURE
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/config.h"
@@ -2863,20 +2418,6 @@ file(CONFIGURE
 	NEWLINE_STYLE LF
 )
 
-# Generate config.asm file, if ASM is enabled
-# To Do - actually wrap this in a conditional for an as-yet to be created ENABLE_ASM build option
-file(READ "${CMAKE_CURRENT_BINARY_DIR}/config.h" CONFIG_H_CONTENTS)
-string(REGEX REPLACE "#define" "%define" CONFIG_ASM_CONTENTS ${CONFIG_H_CONTENTS})
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/config.asm" ${CONFIG_ASM_CONTENTS})
-# Clean up some lines not used from config.h
-file(STRINGS "${CMAKE_CURRENT_BINARY_DIR}/config.asm" LINES)
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/config.asm" "")
-foreach(LINE IN LISTS LINES)
-	if(NOT LINE MATCHES "Generated" AND NOT LINE MATCHES "CONFIG_H" AND NOT LINE MATCHES "FFMPEG_CONFIGURATION" AND NOT LINE MATCHES "FFMPEG_LICENSE" AND NOT LINE MATCHES "CONFIG_THIS_YEAR" AND NOT LINE MATCHES "FFMPEG_DATADIR" AND NOT LINE MATCHES "AVCONV_DATADIR" AND NOT LINE MATCHES "CC_IDENT" AND NOT LINE MATCHES "av_restrict" AND NOT LINE MATCHES "EXTERN_PREFIX" AND NOT LINE MATCHES "EXTERN_ASM" AND NOT LINE MATCHES "BUILDSUF" AND NOT LINE MATCHES "SLIBSUF" AND NOT LINE MATCHES "HAVE_MMX2" AND NOT LINE MATCHES "SWS_MAX_FILTER_SIZE")
-		file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/config.asm" "${LINE}\n")
-	endif()
-endforeach()
-
 # Generate avconfig.h file
 # Test for BIGENDIAN
 if(CMAKE_C_BYTE_ORDER STREQUAL "BIG_ENDIAN")
@@ -2884,8 +2425,6 @@ if(CMAKE_C_BYTE_ORDER STREQUAL "BIG_ENDIAN")
 else()
 	set(IS_BIGENDIAN 0)
 endif()
-
-
 
 file(CONFIGURE
 	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/libavutil/avconfig.h"
