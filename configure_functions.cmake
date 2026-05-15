@@ -10,7 +10,7 @@ function(check_cc target ARGUMENTS RESULT_VAR)
 	set(OUTPUT_OBJ "${CONFIG_TESTS_DIR}/${target}.o")
 	execute_process(
 		COMMAND ${CMAKE_C_COMPILER} 
-				${CMAKE_C_FLAGS}
+				${ADDL_INCLUDES}
 				-c "${CONFIG_TESTS_DIR}/${target}.c"
 				-o "${OUTPUT_OBJ}"
 		RESULT_VARIABLE result
@@ -32,7 +32,7 @@ function(check_cxx target ARGUMENTS RESULT_VAR)
 	set(OUTPUT_OBJ "${CONFIG_TESTS_DIR}/${target}.o")
 	execute_process(
 		COMMAND ${CMAKE_CXX_COMPILER} 
-				${CMAKE_CXX_FLAGS} 
+				${ADDL_INCLUDES} 
 				-c "${CONFIG_TESTS_DIR}/${target}.cpp"
 				-o "${OUTPUT_OBJ}"
 		RESULT_VARIABLE result
@@ -68,8 +68,8 @@ function(check_ld target ARGUMENTS EXTERNAL_LIB RESULT_VAR)
 		set(OUTPUT_OBJ "${CONFIG_TESTS_DIR}/${target}_preliminary.o")
 		execute_process(
 			COMMAND ${CMAKE_C_COMPILER}
-					${CMAKE_C_FLAGS}
-					${CMAKE_SHARED_LINKER_FLAGS}
+					${ADDL_INCLUDES}
+					${ADDL_LIBS}
 					${EXTERNAL_LIB}
 					"${OUTPUT_OBJ}"
 					-o "${CONFIG_TESTS_DIR}/${target}.exe"
@@ -232,168 +232,6 @@ function(check_builtin target headers builtin RESULT_VAR)
 	check_code(${target} ld "${headers}" "${builtin}" ${RESULT_VAR})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 	# Note: configure actually invokes check_code with an incorrect/extra number of arguments!
-endfunction()
-
-# Rewrite of ffmpeg's check_native function at lines 4000 and 4011 of configure script
-function(check_native CPU_NAME)
-    # Create a temporary C file
-	file(WRITE "${CONFIG_TESTS_DIR}/cpu_native.c" "int main(){return 0;}")
-	set(OUTPUT_OBJ "${CONFIG_TESTS_DIR}/cpu_native.o")
-	if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-		# GCC / Clang path
-		set(march_flag "-march=native")
-		execute_process(
-			COMMAND ${CMAKE_C_COMPILER}
-					${CMAKE_C_FLAGS}
-					${march_flag}
-					-v
-					-c "${CONFIG_TESTS_DIR}/cpu_native.c"
-					-o "${OUTPUT_OBJ}"
-			RESULT_VARIABLE result
-			OUTPUT_VARIABLE out
-			ERROR_VARIABLE err
-		)
-
-		if(NOT result EQUAL 0)
-			set(${CPU_NAME} "" PARENT_SCOPE)
-			return()
-		endif()
-
-		set(full_output "${out}\n${err}")
-		# Copilot-written regex patterns for extracting -target-cpu match
-		# Extract CPU name from "-target-cpu <name>"
-		string(REGEX MATCH "-target-cpu[ ]+([^ \n\r\t]+)" match "${full_output}")
-		if(match)
-			string(REGEX REPLACE "-target-cpu[ ]+" "" cpu_name "${match}")
-			set(${CPU_NAME} "${cpu_name}" PARENT_SCOPE)
-		else()
-			set(${CPU_NAME} "" PARENT_SCOPE)
-		endif()
-	endif()
-endfunction()
-
-# Rewrite of ffmpeg's check_arm_arch function at line 4092 of configure script
-function(check_arm_arch arm_version1 arm_version2 RESULT_VAR)
-	if (arm_version2 AND NOT arm_version2 EQUAL 0)
-		set(arm_version "${arm_version2}")
-	else()
-		set(arm_version "${arm_version1}")
-	endif()
-	check_cpp_condition(arm_arch "stddef.h" "defined(__ARM_ARCH_${arm_version1}) || defined(__TARGET_ARCH_${arm_version})" RESULT_VAR)
-	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
-endfunction()
-
-# Rewrite of ffmpeg's probe_arm_arch function at line 4098 of configure script
-function(probe_arm_arch RESULT_VAR)
-	set(arm_archs "4;4T;5;5E;5T;5TE;5TEJ;6;6J;6K;6Z;6ZK;6T2;7;7A;7S;7R;7M;7EM;8A")
-	foreach(arch IN LISTS arm_archs)
-		if (${arch} STREQUAL "7A")
-			set(arch2 "7_A")
-		elseif (${arch} STREQUAL "7R")
-			set(arch2 "7_R")
-		elseif (${arch} STREQUAL "7M")
-			set(arch2 "7_M")
-		elseif (${arch} STREQUAL "7EM")
-			set(arch2 "7E_M")
-		elseif (${arch} STREQUAL "8A")
-			set(arch2 "8_A")
-		else()
-			set(arch2 0)
-		endif()
-		check_arm_arch(${arch} ${arch2} result)
-		if (${arch} STREQUAL "4" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv4" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "4T" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv4t" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "5" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv5" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "5E" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv5e" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "5T" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv5t" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "5TE" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv5te" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "5TEJ" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv5te" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "6" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv6" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "6J" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv6j" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "6K" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv6k" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "6Z" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv6z" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "6ZK" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv6zk" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "6T2" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv6t2" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "7" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv7" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "7A" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv7-a" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "7S" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv7-a" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "7R" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv7-r" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "7M" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv7-m" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "7EM" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv7-m" PARENT_SCOPE)
-			return()
-		elseif (${arch} STREQUAL "8A" AND ${result} EQUAL 0)
-			set(${RESULT_VAR} "armv8-a" PARENT_SCOPE)
-			return()
-		else()
-			set(${RESULT_VAR} "unknown" PARENT_SCOPE)
-		endif()
-	endforeach()
-endfunction()
-
-# Rewrite of ffmpeg's check_64bit function at line 4401 of configure script
-function(check_64bit arch32 arch64 expression RESULT_VAR)
-	check_code(32vs64 cc "" "int test[2*(${expression}) - 1]" result)
-	if (${result} EQUAL 1)
-		set(${RESULT_VAR} ${arch64} PARENT_SCOPE)
-	else()
-		set(${RESULT_VAR} ${arch32} PARENT_SCOPE)
-	endif()
-endfunction()
-
-# Rewrite of ffmpeg's check_gas function at line 4954 of configure script
-function(check_gas RESULT_VAR)
-	check_as(gas ".macro m n, y:vararg=0\n\\n: .int \\y\n.endm\nm x" ${RESULT_VAR})
-	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
-endfunction()
-
-# Rewrite of ffmpeg's check_exec function at line 1203 of configure script
-function(check_exec target ARGUMENT RESULT_VAR)
-	check_ld(${target} "${ARGUMENT}" "" ${RESULT_VAR})
-	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
-endfunction()
-
-# Rewrite of ffmpeg's check_exec_crash function at line 1207 of configure script
-function(check_exec_crash target ARGUMENT RESULT_VAR)
-	set(TEST_CODE "#include <signal.h>\nstatic void sighandler(int sig){\n    raise(SIGTERM)\;\n}\nint foo(void){\n	${ARGUMENT}\n}\nint (*func_ptr)(void) = foo\;\nint main(void){\n	signal(SIGILL, sighandler)\;\n	signal(SIGFPE, sighandler)\;\n	signal(SIGSEGV, sighandler)\;\n#ifdef SIGBUS\n	signal(SIGBUS, sighandler)\;\n#endif\n    return func_ptr()\;\n}" ${RESULT_VAR})
-	check_exec(${target} "${TEST_CODE}" ${RESULT_VAR})
-	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
 
 # convenience function at the end that sets any truthy variables to "1" and any falsy variables to "0"

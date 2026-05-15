@@ -1,4 +1,4 @@
---- CMakeLists.txt.orig	2026-05-14 00:30:00 UTC
+--- CMakeLists.txt.orig	2026-05-12 13:18:06 UTC
 +++ CMakeLists.txt
 @@ -80,7 +80,7 @@ endif()
  endif()
@@ -17,7 +17,7 @@
  option(USE_SYSTEM_FREETYPE "Dynamically link against system freetype" ${USE_SYSTEM_FREETYPE})
  option(USE_SYSTEM_LIBCHDR "Dynamically link against system libchdr" ${USE_SYSTEM_LIBCHDR})
  option(USE_SYSTEM_LIBZIP "Dynamically link against system libzip" ${USE_SYSTEM_LIBZIP})
-@@ -993,81 +994,83 @@ if(USE_FFMPEG)
+@@ -993,83 +994,90 @@ if(USE_FFMPEG)
  )
  
  if(USE_FFMPEG)
@@ -168,4 +168,32 @@
 +	endif()
  endif(USE_FFMPEG)
  
++if (BUILD_BUNDLED_FFMPEG)
++	set(CMAKE_REQUIRED_FLAGS "-pedantic -Wall -Werror -Wno-unused-variable")
++	set(HAVE_LIBAVCODEC_CONST_AVCODEC)
++endif()
++
  find_package(ZLIB)
+ if(ZLIB_FOUND AND NOT ANDROID)
+ 	include_directories(${ZLIB_INCLUDE_DIR})
+@@ -2656,6 +2664,20 @@ if(FFmpeg_FOUND)
+ 		FFmpeg::avutil
+ 		FFmpeg::swresample
+ 		FFmpeg::swscale
++		${ZLIB_LIBRARY}
++	)
++elseif(BUILD_BUNDLED_FFMPEG)
++	target_compile_definitions(${CoreLibName} PRIVATE USE_FFMPEG=1)
++	if (HAVE_LIBAVCODEC_CONST_AVCODEC)
++		target_compile_definitions(${CoreLibName} PRIVATE HAVE_LIBAVCODEC_CONST_AVCODEC=1)
++	endif()
++	set_target_properties(${CoreLibName} PROPERTIES NO_SYSTEM_FROM_IMPORTED true)
++	target_link_libraries(${CoreLibName}
++		avcodec
++		avformat
++		avutil
++		swresample
++		swscale
+ 		${ZLIB_LIBRARY}
+ 	)
+ endif()

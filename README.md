@@ -1,11 +1,18 @@
 # Experimental integration of ffmpeg into PPSSPP as a bundled module
 
-This is a WIP experimental integration of ffmpeg into PPSSPP as a bundled module. To test it, copy the contents of this repository (minus the two patch files) to a new folder inside an extracted PPSSPP unified source tarball, labeled ext/ffmpeg-build. Then copy the contents of ppsspp-ffmpeg (minus all of the platform and architecture specific precompiled libraries) to a newly created ext/ffmpeg folder.
+This is a WIP experimental integration of ffmpeg into PPSSPP as a bundled module.
 
-To build PPSSPP with bundled ffmpeg instead of either ppsspp-ffmpeg's prebuilt libraries or system ffmpeg, PPSSPP's CMakeLists.txt and ext/CMakeLists.txt will need to be patched using the two patches in this repository.
+To test this, extract a PPSSPP source tarball (or git pull). Create two new folders instead of PPSSPP's ext/ folder:
 
-Then, PPSSPP can be built normally with the BUILD_BUNDLED_FFMPEG cmake option turned on.
+ffmpeg
+ffmpeg-build
 
-Note: currently PPSSPP builds, but does not properly display video, using this experimental cmake port of ffmpeg. However, building ffmpeg from within this root repository using the ppsspp-ffmpeg sources and then manually bundling it with PPSSPP *does* work on my test system, so likely one or more inherited cmake flags or options set by PPSSPP cause trouble with the ffmpeg cmake build. More to follow on that front.
+Copy the contents of [ppsspp-ffmpeg](https://github.com/hrydgard/ppsspp-ffmpeg) into the newly created ext/ffmpeg folder. You do not need to include the prebuilt binaries for various systems and architectures. Alternatively, copy the contents of a source tarball for ffmpeg-3.0.2.
 
-This bundled ffmpeg module does NOT utilize Assembly or architecture-specific optimizations. For the limited use case of ffmpeg in PPSSPP, playback of generally small H.264 videos, any gains from those optimizations are supposedly minimal yet greatly increase the complexity of porting ffmpeg to cmake.
+The contents of this repository, minus the two patch- files, should go into the ext/ffmpeg-build folder. 
+
+PPSSPP's CMakeLists.txt and ext/CMakeLists.txt will also need to be patched using the two patches in this repository.
+
+Then, PPSSPP can be built normally--simply set the patched-in BUILD_BUNDLED_FFMPEG cmake option on. PPSSPP will then attempt to build ffmpeg as a regular bundled module rather than importing it as a third-party library.
+
+This bundled ffmpeg module does NOT utilize Assembly or architecture-specific optimizations. For the limited use case of ffmpeg in PPSSPP, playback of generally small H.264 videos, any gains from those optimizations are supposedly minimal yet greatly increase the complexity of porting ffmpeg to cmake (and fragility of the build itself).
