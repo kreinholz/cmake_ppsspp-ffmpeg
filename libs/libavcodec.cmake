@@ -10,11 +10,6 @@ set(LIBAVCODEC_SOURCE_FILES
 	${LIBAVCODEC_SRC_DIR}/aactab.c
 	${LIBAVCODEC_SRC_DIR}/aandcttab.c
 	${LIBAVCODEC_SRC_DIR}/allcodecs.c
-	${LIBAVCODEC_SRC_DIR}/atrac.c
-	${LIBAVCODEC_SRC_DIR}/atrac3.c
-	${LIBAVCODEC_SRC_DIR}/atrac3plus.c
-	${LIBAVCODEC_SRC_DIR}/atrac3plusdec.c
-	${LIBAVCODEC_SRC_DIR}/atrac3plusdsp.c
 	${LIBAVCODEC_SRC_DIR}/audioconvert.c
 	${LIBAVCODEC_SRC_DIR}/avdct.c
 	${LIBAVCODEC_SRC_DIR}/avfft.c
@@ -172,18 +167,13 @@ set(LIBAVCODEC_HEADERS
 if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/dxva2.c)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/dxva2_h264.c)
-	if(GNU_WINDRES OR MSVC)
-		list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/avcodecres.rc)
-	endif()
 	if (MSVC)
 		list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/file_open.c)
 	endif()
-elseif (Threads_FOUND) # PPSSPP root CMakeLists.txt has 'include(FindThreads)' so we should be able to call this here
+endif()
+
+if (Threads_FOUND)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread.c)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread_slice.c)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread_frame.c)
-endif()
-
-if(VDPAU_X11)
-	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/vdpau.c)
 endif()

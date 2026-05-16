@@ -1,5 +1,7 @@
 # configure_functions.cmake - various functions from ffmpeg's configure script rewritten for cmake
 
+# Note: cmake has modules that could accomplish a lot of these checks. CheckCSourceCompiles, CheckIncludeFile, CheckTypeSize, CheckFunctionExists, etc. However, I found during testing that sometimes, cmake reachs a different result than ffmpeg. In order to not break ffmpeg, we need to arrive at the same result as ffmpeg's configure script's check, so instead of relying on cmake modules, I ported ffmpeg's configure script's functions needed below.
+
 # Create a directory to store all of our tests
 set(CONFIG_TESTS_DIR "${CMAKE_CURRENT_BINARY_DIR}/configure_checks")
 file(MAKE_DIRECTORY ${CONFIG_TESTS_DIR})
@@ -27,11 +29,12 @@ function(check_cc target ARGUMENTS RESULT_VAR)
 endfunction()
 
 # Rewrite of ffmpeg's check_cxx function at line 873 of configure script
-function(check_cxx target ARGUMENTS RESULT_VAR)
+function(check_cxx target ARGUMENTS flag RESULT_VAR)
 	file(WRITE "${CONFIG_TESTS_DIR}/${target}.cpp" "${ARGUMENTS}")
 	set(OUTPUT_OBJ "${CONFIG_TESTS_DIR}/${target}.o")
 	execute_process(
 		COMMAND ${CMAKE_CXX_COMPILER} 
+				${flag}
 				${ADDL_INCLUDES} 
 				-c "${CONFIG_TESTS_DIR}/${target}.cpp"
 				-o "${OUTPUT_OBJ}"
@@ -112,10 +115,10 @@ function(check_code target compiler headers ARGUMENTS RESULT_VAR)
 endfunction()
 
 # Rewrite of ffmpeg's check_header function at line 1053 of configure script
-function(check_header target header RESULT_VAR)
+function(check_header target header flag RESULT_VAR)
 	set(HEADER_STRING "#include <${header}>")
 	set(TEST_CODE "${HEADER_STRING}\nint x\;")
-	check_cxx(${target} ${TEST_CODE} ${RESULT_VAR})
+	check_cxx(${target} ${TEST_CODE} "${flag}" ${RESULT_VAR})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
 
@@ -191,16 +194,16 @@ function(check_cpp_condition target header condition RESULT_VAR)
 	set(HEADER_STRING "#include <${header}>")
 	set(CONDITION_STRING "#if !\(${condition})\n#error \"unsatisfied condition: ${condition}\"\n#endif")
 	set(TEST_CODE "${HEADER_STRING}\n${CONDITION_STRING}\nint x\;")
-	check_cxx(${target} ${TEST_CODE} ${RESULT_VAR})
+	check_cxx(${target} ${TEST_CODE} "" ${RESULT_VAR})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
 
 # Rewrite of ffmpeg's check_lib function at line 1164 of configure script
-function(check_lib target header func RESULT_VAR)
+function(check_lib target header func flag RESULT_VAR)
 	set(HEADER_STRING "${header}")
 	set(FUNC_STRING "${func}")
 	set(HEADER_RESULT_VAR "HEADER_${RESULT_VAR}")
-	check_header("${target}_header" "${HEADER_STRING}" ${HEADER_RESULT_VAR})
+	check_header("${target}_header" "${HEADER_STRING}" "${flag}" ${HEADER_RESULT_VAR})
 	if (${HEADER_RESULT_VAR} EQUAL 1)
 		check_func(${target} "${func}" ${RESULT_VAR})
 	endif()

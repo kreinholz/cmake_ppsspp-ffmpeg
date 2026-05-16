@@ -6,9 +6,6 @@ include(FindPkgConfig)
 # Threads are required
 find_package(Threads REQUIRED)
 
-# GNU windres isn't required, but used to compile Windows .rc files with MinGW. MSVC can also compile them
-find_package(GNU_WINDRES QUIET)
-
 set(SRC_DIR ../ffmpeg)
 set(LIBAVCODEC_SRC_DIR ${SRC_DIR}/libavcodec)
 set(LIBAVFORMAT_SRC_DIR ${SRC_DIR}/libavformat)
@@ -16,24 +13,11 @@ set(LIBAVUTIL_SRC_DIR ${SRC_DIR}/libavutil)
 set(LIBSWRESAMPLE_SRC_DIR ${SRC_DIR}/libswresample)
 set(LIBSWSCALE_SRC_DIR ${SRC_DIR}/libswscale)
 
-# Clear any inherited COMPILE_OPTIONS from PPSSPP project root--some of them break ffmpeg
-get_directory_property(opts COMPILE_OPTIONS)
-set_directory_properties(PROPERTIES COMPILE_OPTIONS "")
-
-# Restore some flags needed to build ffmpeg
-add_compile_options(-I/usr/local/include)
+# Set some flags needed to for ffmpeg internal checks
 set(ADDL_INCLUDES -I/usr/local/include)
-add_compile_options(-L/usr/local/lib)
 set(ADDL_LIBS -L/usr/local/lib)
 # Add PIC - note: CMAKE_POSITION_INDEPENDENT_CODE is supposed to be more portable than adding an -fPIC compiler flag
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-if (NOT "${X11_Xlib_INCLUDE_PATH}" MATCHES "/usr/local/include")
-	add_compile_options(-I${X11_Xlib_INCLUDE_PATH})
-endif()
-if (NOT "${ZLIB_INCLUDE_DIR}" MATCHES "/usr/local/include")
-	add_compile_options(-I${ZLIB_INCLUDE_DIR})
-endif()
 
 # To Do - conditionally apply COMPILER_Flags based on the build target
 

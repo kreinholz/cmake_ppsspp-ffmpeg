@@ -135,11 +135,6 @@ set(LIBAVUTIL_HEADERS
 	${CMAKE_CURRENT_BINARY_DIR}/libavutil/avconfig.h 
 )
 
-# OS-specific sources
-if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows" OR GNU_WINDRES OR MSVC)
-	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/avutilres.rc)
-endif()
-
 add_library(avutil STATIC ${LIBAVUTIL_SOURCE_FILES})
 target_precompile_headers(avutil PRIVATE 
 	${CMAKE_CURRENT_BINARY_DIR}/libavutil/ffversion.h 

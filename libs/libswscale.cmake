@@ -20,8 +20,3 @@ set(LIBSWSCALE_HEADERS
 	${LIBSWSCALE_SRC_DIR}/swscale.h
 	${LIBSWSCALE_SRC_DIR}/version.h
 )
-
-# OS-specific sources
-if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows" OR GNU_WINDRES OR MSVC)
-	list(APPEND LIBSWSCALE_SOURCE_FILES ${LIBSWSCALE_SRC_DIR}/swscaleres.rc)
-endif()

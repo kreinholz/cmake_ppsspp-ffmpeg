@@ -1,16 +1,8 @@
 # Before we compile ffmpeg libs, we need to generate config.h/config.asm, libavutil/avconfig.h, and libavutil/ffversion.h.
 
-# Generate config.h file
-
-# Note: some/all of these includes might be leftovers from an earlier iteration of this file, but remove with caution
-include(CheckCSourceCompiles)
-include(CheckTypeSize)
-include(CheckStructHasMember)
-include(CheckSymbolExists)
-include(CheckFunctionExists)
-include(CheckIncludeFile)
-
 include(configure_functions.cmake)
+
+# Generate config.h file
 
 # Check for extern_prefix
 check_cc(ff_extern "int ff_extern;" HAVE_ff_extern)
@@ -32,7 +24,7 @@ string(REGEX REPLACE "ff_extern" "" extern_asm "${extern_asm_orig}")
 # Note: when I run the nm and awk commands, piped, in a shell, I don't have to do a regex replace of "ff_extern"
 
 set(build_suffix \"\")
-# Note: I can't find anywhere this is defined
+# Note: I can't find anywhere this is defined, nor should it matter for purposes of bundling with PPSSPP
 
 set(SLIBSUF \"${CMAKE_SHARED_LIBRARY_SUFFIX}\")
 
@@ -72,7 +64,7 @@ set(CC_IDENT \"${CC_IDENT}\")
 
 # Check for PIC - see line 4845 of ffmpeg's configure script
 set(CONFIG_PIC 1)
-check_cpp_condition(pic "stdlib.h" "defined(__PIC__) || defined(__pic__) || defined(PIC)" CONFIG_PIC)
+#check_cpp_condition(pic "stdlib.h" "defined(__PIC__) || defined(__pic__) || defined(PIC)" CONFIG_PIC)
 # FIXME: ffmpeg's configure script gets passing test results on my system--yet this check fails; but it's clearly not defined in stdlib.h so I don't know how it passed with ffmpeg's configure!
 # For now, default to "1" since the vast majority of build environments support/require PIC
 
@@ -83,7 +75,7 @@ check_cc(attribute_packed "struct { int x; } __attribute__((packed)) x;" HAVE_AT
 
 check_cc(attribute_may_alias "union { int x; } __attribute__((may_alias)) x;" HAVE_ATTRIBUTE_MAY_ALIAS)
 
-check_func(dlopen "dlopen" HAVE_DLOPEN)	# Note: we could modify check_func to allow a shared lib arg vice passing ""
+check_func(dlopen "dlopen" HAVE_DLOPEN)
 
 check_builtin(atomic_cas_ptr "<atomic.h>" "void **ptr\; void *oldval, *newval\; atomic_cas_ptr(ptr, oldval, newval)" HAVE_ATOMIC_CAS_PTR)
 check_builtin(atomic_compare_exchange "" "int *ptr, *oldval\; int newval\; __atomic_compare_exchange_n(ptr, oldval, newval, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)" HAVE_ATOMIC_COMPARE_EXCHANGE)
@@ -129,8 +121,9 @@ endif()
 check_func(sched_getaffinity "sched_getaffinity" HAVE_SCHED_GETAFFINITY)
 check_func(setrlimit "setrlimit" HAVE_SETRLIMIT)
 check_struct(st_mtim.tv_nsec "<sys/stat.h>" "struct stat" st_mtim.tv_nsec HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC)
-# To Do: check the above; in ffmpeg's configure script, there's a -D_BSD_SOURCE flag added to the end. Supposedly
-# that's been deprecated since 2014 and the new flag is -D_DEFAULT_SOURCE to enable various extensions to POSIX
+# To Do: check the above; in ffmpeg's configure script, there's a -D_BSD_SOURCE compiler flag added to the end. 
+# That's been deprecated since 2014 and the new flag is -D_DEFAULT_SOURCE to enable various extensions to POSIX
+# This is the only time a compiler flag is passed to check_struct() so I'm loathe to refactor just for this one check
 check_func(strerror_r "strerror_r" HAVE_STRERROR_R)
 check_func(sysconf "sysconf" HAVE_SYSCONF)
 check_func(sysctl "sysctl" HAVE_SYSCTL)
@@ -142,8 +135,8 @@ check_func_headers(lzo1x_999_compress "<lzo/lzo1x.h>" "lzo1x_999_compress" "" HA
 check_func_headers(getenv "<stdlib.h>" "getenv" "" HAVE_GETENV)
 check_func_headers(lstat "<sys/stat.h>" "lstat" "" HAVE_LSTAT)
 
-# Note: lines 5318-5328 all rely on windows.h header--I'm not sure why they're not inside a Windows-only conditional
-check_header(windows "windows.h" HAVE_WINDOWS_H)	# Note: check repeated at line 5358 so doing only here instead
+# Note: lines 5318-5328 all rely on windows.h header--modified here to only run if in fact windows.h exists
+check_header(windows "windows.h" "" HAVE_WINDOWS_H)	# Note: check repeated at line 5358 so doing only here instead
 if (HAVE_WINDOWS_H)
 	check_func_headers(cotaskmemfree "<windows.h>" "CoTaskMemFree" "-lole32" HAVE_COTASKMEMFREE)
 	check_func_headers(getprocessaffinitymask "<windows.h>" "GetProcessAffinityMask" "" HAVE_GETPROCESSAFFINITYMASK)
@@ -162,46 +155,36 @@ check_func_headers(glob "<glob.h>" "glob" "" HAVE_GLOB)
 # Xlib check at lines 5330-5331
 check_func_headers(xlib "<X11/Xlib.h>;<X11/extensions/Xvlib.h>" "XvGetPortAttribute" "-lXv;-lX11;-lXext" CONFIG_XLIB)
 
-check_header(direct "direct.h" HAVE_DIRECT_H)
-check_header(dirent "dirent.h" HAVE_DIRENT_H)
-check_header(dlfcn "dlfcn.h" HAVE_DLFCN_H)
-check_header(d3d11 "d3d11.h" HAVE_D3D11_H)
-check_header(dxva "dxva.h" HAVE_DXVA_H)
-check_header(dxva2api "dxva2api.h" HAVE_DXVA2API_H)	# -D_WIN32_WINNT=0x0600
-check_header(io "io.h" HAVE_IO_H)
-check_header(mach_time "mach/mach_time.h" HAVE_MACH_MACH_TIME_H)
-check_header(malloc "malloc.h" HAVE_MALLOC_H)
-check_header(udplite "net/udplite.h" HAVE_UDPLITE_H)
-check_header(poll "poll.h" HAVE_POLL_H)
-check_header(mman "sys/mman.h" HAVE_SYS_MMAN_H)
-check_header(param "sys/param.h" HAVE_SYS_PARAM_H)
-check_header(resource "sys/resource.h" HAVE_SYS_RESOURCE_H)
-check_header(select "sys/select.h" HAVE_SYS_SELECT_H)
-check_header(time "sys/time.h" HAVE_SYS_TIME_H)
-check_header(un "sys/un.h" HAVE_SYS_UN_H)
-check_header(termios "sys/termios.h" HAVE_TERMIOS_H)
-check_header(unistd "sys/unistd.h" HAVE_UNISTD_H)
-check_header(valgrind "valgrind/valgrind.h" HAVE_VALGRIND_VALGRIND_H)
+check_header(direct "direct.h" "" HAVE_DIRECT_H)
+check_header(dirent "dirent.h" "" HAVE_DIRENT_H)
+check_header(dlfcn "dlfcn.h" "" HAVE_DLFCN_H)
+check_header(d3d11 "d3d11.h" "" HAVE_D3D11_H)
+check_header(dxva "dxva.h" "" HAVE_DXVA_H)
+check_header(dxva2api "dxva2api.h" "-D_WIN32_WINNT=0x0600" HAVE_DXVA2API_H)
+check_header(io "io.h" "" HAVE_IO_H)
+check_header(mach_time "mach/mach_time.h" "" HAVE_MACH_MACH_TIME_H)
+check_header(malloc "malloc.h" "" HAVE_MALLOC_H)
+check_header(udplite "net/udplite.h" "" HAVE_UDPLITE_H)
+check_header(poll "poll.h" "" HAVE_POLL_H)
+check_header(mman "sys/mman.h" "" HAVE_SYS_MMAN_H)
+check_header(param "sys/param.h" "" HAVE_SYS_PARAM_H)
+check_header(resource "sys/resource.h" "" HAVE_SYS_RESOURCE_H)
+check_header(select "sys/select.h" "" HAVE_SYS_SELECT_H)
+check_header(time "sys/time.h" "" HAVE_SYS_TIME_H)
+check_header(un "sys/un.h" "" HAVE_SYS_UN_H)
+check_header(termios "sys/termios.h" "" HAVE_TERMIOS_H)
+check_header(unistd "sys/unistd.h" "" HAVE_UNISTD_H)
+check_header(valgrind "valgrind/valgrind.h" "" HAVE_VALGRIND_VALGRIND_H)
 
 # Line 5362
 check_lib2(commandlinetoargvw "<windows.h>;<shellapi.h>" "CommandLineToArgvW" "-shell32" HAVE_COMMANDLINETOARGVW)
 check_lib2(cryptgenrandom "<windows.h>;<wincrypt.h>" "CryptGenRandom" "-ladvapi32" HAVE_CRYPTGENRANDOM)
 check_lib2(getprocessmemoryinfo "<windows.h>;<psapi.h>" "GetProcessMemoryInfo" "-lpsapi" HAVE_GETPROCESSMEMORYINFO)
-check_lib(utgetostypefromstring "CoreServices/CoreServices.h" "UTGetOSTypeFromString" HAVE_UTGETOSTYPEFROMSTRING)
-# To Do: the above has a follow-up: "-framework CoreServices"
+check_lib(utgetostypefromstring "CoreServices/CoreServices.h" "UTGetOSTypeFromString" "-framework CoreServices" HAVE_UTGETOSTYPEFROMSTRING)
+# To Do: the above check passes the compiler flag to the embedded check_header call but not to check_func
 check_struct(ru_maxrss "<sys/time.h>;<sys/resource.h>" "struct rusage" ru_maxrss HAVE_STRUCT_RUSAGE_RU_MAXRSS)
 
-check_type(dxva_picparams_hevc "<windows.h>;<dxva.h>" "DXVA_PicParams_HEVC" DXVA_PICPARAMS_HEVC) # To do: ffmpeg configure doesn't set a variable, it sets the following flags: -DWINAPI_FAMILY=WINAPI_FAMILY_DESKTOP_APP -D_CRT_BUILD_DESKTOP_APP=0
-
-
-check_type(dxva_picparams_vp9 "<windows.h>;<dxva.h>" "DXVA_PicParams_VP9" DXVA_PICPARAMS_VP9) # To do: set the following flags: -DWINAPI_FAMILY=WINAPI_FAMILY_DESKTOP_APP -D_CRT_BUILD_DESKTOP_APP=0
-check_type(id3d11videodecoder "<windows.h>;<d3d11.h>" "ID3D11VideoDecoder" ID3D11VIDEODECODER) # To do: something
-check_type(id3d11videocontext "<windows.h>;<d3d11.h>" "ID3D11VideoContext" ID3D11VIDEOCONTEXT) # To do: something
-check_type(dxva2_configpicturedecode "<d3d9.h>;<dxva2api.h>" "DXVA2_ConfigPictureDecode" DXVA2_CONFIGPICTUREDECODE)
-# To do: set flag -D_WIN32_WINNT=0x0602
-
-check_cpp_condition(winrt "windows.h" "!WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)" HAVE_WINRT) 
-# To Do: enable WINRT if true--simply adding the variable to the end of the check might do it
+check_cpp_condition(winrt "windows.h" "!WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)" HAVE_WINRT)
 
 # pthreads vs w32threads - see lines 5382-5389. Note: since we're hardcoding configure 'options', slight change here
 if (HAVE_WINDOWS_H)	# Enable w32threads if either of configure script's conditions are met; deal with pthreads later
@@ -226,15 +209,9 @@ endif()
 # FIXME: the second check, for pthread_create, currently fails with linker error 'ld: error: undefined symbol: pthread_create'. For now, commented out. The final conditional is supposed to look for all 3 but if we have pthread_join and pthread_cancel, realistically we have pthreads. PPSSPP also has a cmake check for pthreads
 
 # Note: the following checks at lines 5421-5423 require a lib argument; ffmpeg's configure uses check_lib for the
-# first check, which fails due to lack of a lib argument. Using check_lib2 instead, like the following 2 checks
+# first check, which fails due to lack of a lib argument. Using check_lib2 instead. This check SHOULD always pass
+# since PPSSPP requires zlib
 check_lib2(zlibversion "<zlib.h>" "zlibVersion" "-lz" CONFIG_ZLIB)
-check_lib2(bz2_bzlibversion "<bzlib.h>" "BZ2_bzlibVersion" "-lbz2" CONFIG_BZLIB)
-check_lib2(lzma_version_number "<lzma.h>" "lzma_version_number" "-llzma" CONFIG_LZMA)
-# To Do: add appropriate external libs if the above checks pass; or do we want to disable some/all of the above?
-
-check_lib2(sin "<math.h>" "sin" "-lm" SIN)
-# To Do: this check doesn't set any variables, but seems to add an alias "-lm" for LIBM
-check_lib2(dtscrystalhdversion "<libcrystalhd/libcrystalhd_if.h>" "DtsCrystalHDVersion" "-lcrystalhd" CONFIG_CRYSTALHD)
 
 # check all listed math_funcs - see lines 5434-5436
 set(mathfuncs "atanf;atan2f;cbrt;cbrtf;copysign;cosf;erf;exp2;exp2f;expf;hypot;isfinite;isinf;isnan;ldexpf;llrint;llrintf;log2;log2f;log10f;lrint;lrintf;powf;rint;round;roundf;sinf;trunc;truncf")
@@ -248,18 +225,18 @@ endforeach()
 check_complexfunc(cabs cabs HAVE_CABS)
 check_complexfunc(cexp cexp HAVE_CEXP)
 
-check_header(sys_videoio "sys/videoio.h" HAVE_SYS_VIDEOIO_H)
+check_header(sys_videoio "sys/videoio.h" "" HAVE_SYS_VIDEOIO_H)
 
 check_type(ibasefilter "<dshow.h>" "IBaseFilter" CONFIG_DSHOW_INDEV)	# Note: not sure this is the right variable
 
-check_header(sndio "sndio.h" HAVE_SNDIO_H)
+check_header(sndio "sndio.h" "" HAVE_SNDIO_H)
 check_struct(audio_buf_info "<sys/soundcard.h>" "audio_buf_info bytes;" "audio_buf_info bytes" HAVE_SYS_SOUNDCARD_H)
 if (NOT HAVE_SYS_SOUNDCARD_H)
 	check_cc(sys_soundcard "#include <sys/soundcard.h>\naudio_buf_info abc;" HAVE_SYS_SOUNDCARD_H)
 	# To Do: should deal with "add_cppflags -D__BSD_VISIBLE -D__XSI_VISIBLE" although this fallback check passes
-	# on my system even without them
+	# on my system even without them; if they're needed, the check also needs to be modified to accept them as flags
 endif()
-check_header(soundcard "soundcard.h" HAVE_SOUNDCARD_H)
+check_header(soundcard "soundcard.h" "" HAVE_SOUNDCARD_H)
 
 # Xlib: see lines 5718-5719
 check_lib2(xopendisplay "<X11/Xlib.h>" "XOpenDisplay" "-lX11" HAVE_XLIB)
@@ -1185,8 +1162,8 @@ file(CONFIGURE
 #define CONFIG_AMRWB_DECODER 0
 #define CONFIG_APE_DECODER 0
 #define CONFIG_ATRAC1_DECODER 0
-#define CONFIG_ATRAC3_DECODER 1
-#define CONFIG_ATRAC3P_DECODER 1
+#define CONFIG_ATRAC3_DECODER 0
+#define CONFIG_ATRAC3P_DECODER 0
 #define CONFIG_BINKAUDIO_DCT_DECODER 0
 #define CONFIG_BINKAUDIO_RDFT_DECODER 0
 #define CONFIG_BMV_AUDIO_DECODER 0
