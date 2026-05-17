@@ -59,6 +59,11 @@ set(LIBAVFORMAT_LIBRARY avformat)
 # libavutil
 include(libs/libavutil.cmake)
 add_library(avutil STATIC ${LIBAVUTIL_SOURCE_FILES})
+target_precompile_headers(avutil PRIVATE 
+	${CMAKE_CURRENT_BINARY_DIR}/libavutil/ffversion.h 
+	${CMAKE_CURRENT_BINARY_DIR}/libavutil/avconfig.h 
+	${LIBAVUTIL_SRC_DIR}/internal.h
+)
 set_target_properties(avutil PROPERTIES POSITION_INDEPENDENT_CODE TRUE) # Enable PIC
 target_link_libraries(avutil)
 target_include_directories(avutil PRIVATE ${SRC_DIR} ${CMAKE_CURRENT_BINARY_DIR})

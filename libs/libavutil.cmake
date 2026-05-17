@@ -134,10 +134,3 @@ set(LIBAVUTIL_HEADERS
 	${CMAKE_CURRENT_BINARY_DIR}/libavutil/ffversion.h 
 	${CMAKE_CURRENT_BINARY_DIR}/libavutil/avconfig.h 
 )
-
-add_library(avutil STATIC ${LIBAVUTIL_SOURCE_FILES})
-target_precompile_headers(avutil PRIVATE 
-	${CMAKE_CURRENT_BINARY_DIR}/libavutil/ffversion.h 
-	${CMAKE_CURRENT_BINARY_DIR}/libavutil/avconfig.h 
-	${LIBAVUTIL_SRC_DIR}/internal.h
-)
