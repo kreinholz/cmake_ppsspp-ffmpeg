@@ -25,14 +25,18 @@ else()
 	set(ADDL_LIBS -L/usr/local/lib)
 endif()
 
-# To Do - conditionally apply COMPILER_Flags based on the build target
+# Silence warnings due to design philosophy differences between ffmpeg and modern compilers
+# Taken from meson-ports/ffmpeg's meson.build script at 
+# https://gitlab.freedesktop.org/gstreamer/meson-ports/ffmpeg/-/blob/meson-4.4/meson.build?ref_type=heads
+if (MSVC)
+	add_compile_options(/WO4005 /WD4018 /WD4146 /WD4244 /WD4305 /WD4554 /WD4114 /WD4028 /WD4090 /WD4133)
+else()
+	add_compile_options(-D_ISOC99_SOURCE -D_GNU_SOURCE -D_LARGEFILE_SOURCE -DPIC -Wno-parentheses -Wno-pointer-sign -Wno-switch -Wno-format-truncation -Wno-deprecated-declarations -Wno-unused-function -Wno-maybe-uninitialized -Wno-discarded-qualifiers -Wno-unused-variable -Wno-bool-operation -Wno-incompatible-pointer-types -Wno-address)
+endif()
+
+# To Do - conditionally apply additional compile_options based on the build target if needed
 
 include(generated_headers.cmake)
-
-# Create a separate directory of headers to expose to PPSSPP, mimicking the current setup of ppsspp-ffmpeg
-set(HEADER_INSTALL_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include)
-#set(HEADER_INSTALL_DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}/../include)
-file(MAKE_DIRECTORY ${HEADER_INSTALL_DIRECTORY})
 
 # libavcodec
 include(libs/libavcodec.cmake)
@@ -42,7 +46,6 @@ target_precompile_headers(avcodec PRIVATE ${LIBAVUTIL_SRC_DIR}/internal.h ${LIBA
 target_link_libraries(avcodec)
 target_include_directories(avcodec PRIVATE ${SRC_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(avcodec INTERFACE ${LIBAVCODEC_HEADERS})	# expose libavcodec headers to PPSSPP build
-file(COPY ${LIBAVCODEC_HEADERS} DESTINATION ${HEADER_INSTALL_DIRECTORY}/libavcodec) # same, albeit the "old" way
 set(LIBAVCODEC_LIBRARY avcodec)
 
 # libavformat
@@ -53,7 +56,6 @@ target_precompile_headers(avformat PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/config.h 
 target_link_libraries(avformat)
 target_include_directories(avformat PRIVATE ${SRC_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(avformat INTERFACE ${LIBAVFORMAT_HEADERS})
-file(COPY ${LIBAVFORMAT_HEADERS} DESTINATION ${HEADER_INSTALL_DIRECTORY}/libavformat)
 set(LIBAVFORMAT_LIBRARY avformat)
 
 # libavutil
@@ -68,7 +70,6 @@ set_target_properties(avutil PROPERTIES POSITION_INDEPENDENT_CODE TRUE) # Enable
 target_link_libraries(avutil)
 target_include_directories(avutil PRIVATE ${SRC_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(avutil INTERFACE ${LIBAVUTIL_HEADERS})
-file(COPY ${LIBAVUTIL_HEADERS} DESTINATION ${HEADER_INSTALL_DIRECTORY}/libavutil)
 set(LIBAVUTIL_LIBRARY avutil)
 
 # libswresample
@@ -79,7 +80,6 @@ target_precompile_headers(swresample PRIVATE ${LIBAVUTIL_SRC_DIR}/cpu.h ${LIBAVU
 target_link_libraries(swresample)
 target_include_directories(swresample PUBLIC ${SRC_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(swresample INTERFACE ${LIBSWRESAMPLE_HEADERS})
-file(COPY ${LIBSWRESAMPLE_HEADERS} DESTINATION ${HEADER_INSTALL_DIRECTORY}/libswresample)
 set(LIBSWRESAMPLE_LIBRARY swresample)
 
 # libswscale
@@ -90,6 +90,5 @@ target_precompile_headers(swscale PRIVATE ${LIBAVUTIL_SRC_DIR}/internal.h)
 target_link_libraries(swscale)
 target_include_directories(swscale PRIVATE ${SRC_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(swscale INTERFACE ${LIBSWSCALE_HEADERS})
-file(COPY ${LIBSWSCALE_HEADERS} DESTINATION ${HEADER_INSTALL_DIRECTORY}/libswscale)
 set(LIBSWSCALE_LIBRARY swscale)
 
