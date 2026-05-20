@@ -35,9 +35,9 @@
 #define ARCH_TILEGX 0
 #define ARCH_TILEPRO 0
 #define ARCH_TOMI 0
-#define ARCH_X86 @ARCH_X86@
-#define ARCH_X86_32 @ARCH_X86_32@
-#define ARCH_X86_64 @ARCH_X86_64@
+#define ARCH_X86 0
+#define ARCH_X86_32 0
+#define ARCH_X86_64 0
 #define HAVE_ARMV5TE @HAVE_ARMV5TE@
 #define HAVE_ARMV6 @HAVE_ARMV6@
 #define HAVE_ARMV6T2 @HAVE_ARMV6T2@
