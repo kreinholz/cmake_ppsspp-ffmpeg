@@ -31,7 +31,7 @@ endif()
 if (MSVC)
 	add_compile_options(/WO4005 /WD4018 /WD4146 /WD4244 /WD4305 /WD4554 /WD4114 /WD4028 /WD4090 /WD4133)
 else()
-	add_compile_options(-D_ISOC99_SOURCE -D_GNU_SOURCE -D_LARGEFILE_SOURCE -DPIC -Wno-parentheses -Wno-pointer-sign -Wno-switch -Wno-format-truncation -Wno-deprecated-declarations -Wno-unused-function -Wno-maybe-uninitialized -Wno-discarded-qualifiers -Wno-unused-variable -Wno-bool-operation -Wno-incompatible-pointer-types -Wno-address)
+	add_compile_options(-D_ISOC99_SOURCE -D_GNU_SOURCE -D_LARGEFILE_SOURCE -DPIC -Wno-parentheses -Wno-pointer-sign -Wno-switch -Wno-format-truncation -Wno-deprecated-declarations -Wno-unused-function -Wno-uninitialized -Wno-ignored-qualifiers -Wno-unused-variable -Wno-bool-operation -Wno-incompatible-pointer-types -Wno-address)
 endif()
 
 # To Do - conditionally apply additional compile_options based on the build target if needed
@@ -53,7 +53,7 @@ include(libs/libavformat.cmake)
 add_library(avformat STATIC ${LIBAVFORMAT_SOURCE_FILES})
 set_target_properties(avformat PROPERTIES POSITION_INDEPENDENT_CODE TRUE) # Enable PIC
 target_precompile_headers(avformat PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/config.h ${LIBAVUTIL_SRC_DIR}/internal.h)
-target_link_libraries(avformat)
+target_link_libraries(avformat PUBLIC avcodec)
 target_include_directories(avformat PRIVATE ${SRC_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(avformat INTERFACE ${LIBAVFORMAT_HEADERS})
 set(LIBAVFORMAT_LIBRARY avformat)

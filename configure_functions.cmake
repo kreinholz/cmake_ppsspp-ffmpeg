@@ -119,11 +119,17 @@ endfunction()
 
 # Rewrite of ffmpeg's check_header function at line 1053 of configure script
 function(check_header target header flag RESULT_VAR)
+	check_include_file(${header} ${RESULT_VAR} ${flag})
+	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
+endfunction()
+#[[ old version
+function(check_header target header flag RESULT_VAR)
 	set(HEADER_STRING "#include <${header}>")
 	set(TEST_CODE "${HEADER_STRING}\nint x\;")
 	check_cxx(${target} ${TEST_CODE} "${flag}" ${RESULT_VAR})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
+]]
 
 # Rewrite of ffmpeg's check_func function at line 1076 of configure script
 function(check_func target func RESULT_VAR)
