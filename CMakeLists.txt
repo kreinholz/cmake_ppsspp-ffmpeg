@@ -16,23 +16,26 @@ set(LIBSWSCALE_SRC_DIR ${SRC_DIR}/libswscale)
 # Set some flags needed to for ffmpeg internal checks
 if (IOS)
 	set(ADDL_INCLUDES -I${CMAKE_OSX_SYSROOT}/usr/include)
-	set(ADDL_LIBS -L${CMAKE_OSX_SYSROOT}/usr/lib)
+	set(ADDL_LIB_DIRS -L${CMAKE_OSX_SYSROOT}/usr/lib)
 elseif (CMAKE_CROSSCOMPILING)
 	set(ADDL_INCLUDES --sysroot="${CMAKE_SYSROOT}")
-	set(ADDL_LIBS --sysroot="${CMAKE_SYSROOT}")
+	set(ADDL_LIB_DIRS --sysroot="${CMAKE_SYSROOT}")
 else()
 	set(ADDL_INCLUDES -I/usr/local/include)
-	set(ADDL_LIBS -L/usr/local/lib)
+	set(ADDL_LIB_DIRS -L/usr/local/lib)
 endif()
 
 # Silence warnings due to design philosophy differences between ffmpeg and modern compilers
-# Taken from meson-ports/ffmpeg's meson.build script at 
+# Taken primarily from meson-ports/ffmpeg's meson.build script at 
 # https://gitlab.freedesktop.org/gstreamer/meson-ports/ffmpeg/-/blob/meson-4.4/meson.build?ref_type=heads
 if (MSVC)
 	add_compile_options(/WO4005 /WD4018 /WD4146 /WD4244 /WD4305 /WD4554 /WD4114 /WD4028 /WD4090 /WD4133)
 else()
-	add_compile_options(-D_ISOC99_SOURCE -D_GNU_SOURCE -D_LARGEFILE_SOURCE -DPIC -Wno-parentheses -Wno-pointer-sign -Wno-switch -Wno-format-truncation -Wno-deprecated-declarations -Wno-unused-function -Wno-uninitialized -Wno-ignored-qualifiers -Wno-unused-variable -Wno-bool-operation -Wno-incompatible-pointer-types -Wno-address)
+	add_compile_options(-D_ISOC99_SOURCE -D_GNU_SOURCE -D_LARGEFILE_SOURCE -DPIC -Wno-parentheses -Wno-pointer-sign -Wno-switch -Wno-format-truncation -Wno-deprecated-declarations -Wno-unused-function -Wno-uninitialized -Wno-ignored-qualifiers -Wno-unused-variable -Wno-bool-operation -Wno-incompatible-pointer-types -Wno-address -Wno-string-plus-int -Wno-empty-body -Wno-implicit-const-int-float-conversion)
 endif()
+
+# Hacky override of arch-specific linker errors on Linux builds...config.h options not being honored for this 1 issue
+add_compile_options(-DARCH_X86=0 -DARCH_ARM=0 -DARCH_MIPS=0)
 
 # To Do - conditionally apply additional compile_options based on the build target if needed
 

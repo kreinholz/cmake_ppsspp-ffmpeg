@@ -6,95 +6,140 @@
 set(CONFIG_TESTS_DIR "${CMAKE_CURRENT_BINARY_DIR}/configure_checks")
 file(MAKE_DIRECTORY ${CONFIG_TESTS_DIR})
 
+include(CheckIncludeFile)
+
 # Rewrite of ffmpeg's check_cc function at line 866 of configure script
 function(check_cc target ARGUMENTS RESULT_VAR)
-	file(WRITE "${CONFIG_TESTS_DIR}/${target}.c" "${ARGUMENTS}")
-	set(OUTPUT_OBJ "${CONFIG_TESTS_DIR}/${target}.o")
-	execute_process(
-		COMMAND ${CMAKE_C_COMPILER} 
-				${ADDL_INCLUDES}
-				-c "${CONFIG_TESTS_DIR}/${target}.c"
-				-o "${OUTPUT_OBJ}"
-		RESULT_VARIABLE result
-		OUTPUT_VARIABLE out
-		ERROR_VARIABLE err
-	)
-	if (result EQUAL 0)
-		message(STATUS "${target} check passed")
-		set(${RESULT_VAR} 1 PARENT_SCOPE)
-	else()
-#		message(STATUS "${target} check failed. See ${target}_error.log for details")
-#		file(WRITE "${CONFIG_TESTS_DIR}/${target}_error.log" "${err}")
-		message(STATUS "${target} check failed. Error:\n${err}")
+	set(EXTRA_LIBS "")
+	set(EXTRA_FLAGS "")
+	set(ADDL_LIB_DIRS "")
+	foreach(arg IN ITEMS ${ARGN})
+		if(arg MATCHES "-l")
+			# Append to EXTRA_LIBS
+    		if(EXTRA_LIBS STREQUAL "")
+    			set(EXTRA_LIBS "${arg}")
+    		else()
+    			list(APPEND EXTRA_LIBS "${arg}")
+    		endif()
+    	elseif(arg MATCHES "-L")
+    		# Append to EXTRA_LIBS
+    		if(ADDL_LIB_DIRS STREQUAL "")
+    			set(ADDL_LIB_DIRS "${arg}")
+    		else()
+    			list(APPEND ADDL_LIB_DIRS "${arg}")
+    		endif()
+		else()
+    		# Append to EXTRA_FLAGS
+    		if(EXTRA_FLAGS STREQUAL "")
+    			set(EXTRA_FLAGS "${arg}")
+    		else()
+    			list(APPEND EXTRA_FLAGS "${arg}")
+    		endif()
+		endif()
+	endforeach()
+	# Clean up duplicate paths first
+	if (EXTRA_LIBS)
+		list(REMOVE_DUPLICATES EXTRA_LIBS)
 	endif()
-endfunction()
+	if (ADDL_LIB_DIRS)
+		list(REMOVE_DUPLICATES ADDL_LIB_DIRS)
+	endif()
+	if (EXTRA_FLAGS)
+		list(REMOVE_DUPLICATES EXTRA_FLAGS)
+	endif()
+	
+	set(COMPILE_INCLUDES "")
+	if (ADDL_INCLUDES)
+		foreach(inc_dir IN LISTS ADDL_INCLUDES)
+			# Either ensure each ADDL_INCLUDES entry is prepended with -I or do so below
+			list(APPEND COMPILE_INCLUDES "${inc_dir}")
+		endforeach()
+	endif()
+	# Check if ARGUMENTS contains a variation of main function definition
+	string(REGEX MATCH "int[ \t\r\n]+main[ \t\r\n]*\\(" HAS_MAIN "${ARGUMENTS}")
+	if(NOT HAS_MAIN)
+    	# Append a standard int main() block to the end of the existing source code
+    	string(APPEND ARGUMENTS "\n\nint main(void) {\n    return 0;\n}\n")
+	endif()
 
-# Rewrite of ffmpeg's check_cxx function at line 873 of configure script
-function(check_cxx target ARGUMENTS flag RESULT_VAR)
-	file(WRITE "${CONFIG_TESTS_DIR}/${target}.cpp" "${ARGUMENTS}")
+	set(TEST_SOURCE "${CONFIG_TESTS_DIR}/${target}.c")
+	file(WRITE "${TEST_SOURCE}" "${ARGUMENTS}")
 	set(OUTPUT_OBJ "${CONFIG_TESTS_DIR}/${target}.o")
-	execute_process(
-		COMMAND ${CMAKE_CXX_COMPILER} 
-				${flag}
-				${ADDL_INCLUDES} 
-				-c "${CONFIG_TESTS_DIR}/${target}.cpp"
-				-o "${OUTPUT_OBJ}"
-		RESULT_VARIABLE result
-		OUTPUT_VARIABLE out
-		ERROR_VARIABLE err
+	try_compile(COMPILE_RESULT
+		"${CONFIG_TESTS_DIR}"
+		"${TEST_SOURCE}"
+		COMPILE_DEFINITIONS ${COMPILE_INCLUDES} ${EXTRA_FLAGS}
+		LINK_LIBRARIES ${ADDL_LIB_DIRS} ${EXTRA_LIBS}
+		COPY_FILE "${OUTPUT_OBJ}"
+		OUTPUT_VARIABLE compile_log
 	)
-	if (result EQUAL 0)
-		message(STATUS "${target} check passed")
+	if(COMPILE_RESULT)
+    	message(STATUS "${target} check passed")
 		set(${RESULT_VAR} 1 PARENT_SCOPE)
 	else()
+		message(STATUS "${target} check failed. Error:\n${compile_log}")
 #		message(STATUS "${target} check failed. See ${target}_error.log for details")
-#		file(WRITE "${CONFIG_TESTS_DIR}/${target}_error.log" "${err}")
-		message(STATUS "${target} check failed. Error:\n${err}")
+#		file(WRITE "${CONFIG_TESTS_DIR}/${target}_error.log" "${compile_log}")
 	endif()
 endfunction()
 
 # Rewrite of fmpeg's check_ld function at line 953 of configure script
 function(check_ld target ARGUMENTS EXTERNAL_LIB RESULT_VAR)
-	set(CC_RESULT_VAR ${RESULT_VAR})
-	check_cc("${target}_preliminary" ${ARGUMENTS} ${CC_RESULT_VAR})
-	if (NOT "${EXTERNAL_LIB}" STREQUAL "")
-		list(LENGTH EXTERNAL_LIB len)
-		if (len GREATER 1)
-			foreach(lib IN LISTS EXTERNAL_LIB)
-				string(SUBSTRING "${lib}" 2 -1 lib_TRIMMED)
-				find_library(MYLIB_${lib_TRIMMED} NAMES ${lib} "${lib_TRIMMED}")
-				if (${MYLIB_${lib_TRIMMED}} MATCHES "-NOTFOUND")
-					message(WARNING "Library ${lib} not found! Failing ${target} check")
-				endif()
-			endforeach()
-		endif()
-	endif()
-	if (${CC_RESULT_VAR} EQUAL 1)
-		set(OUTPUT_OBJ "${CONFIG_TESTS_DIR}/${target}_preliminary.o")
-		execute_process(
-			COMMAND ${CMAKE_C_COMPILER}
-					${ADDL_INCLUDES}
-					${ADDL_LIBS}
-					${EXTERNAL_LIB}
-					"${OUTPUT_OBJ}"
-					-o "${CONFIG_TESTS_DIR}/${target}.exe"
-			RESULT_VARIABLE result
-			OUTPUT_VARIABLE out
-			ERROR_VARIABLE err
-			)
-		if (result EQUAL 0)
-			message(STATUS "${target} check passed")
-			set(${RESULT_VAR} 1 PARENT_SCOPE)
-		else()
-#			message(STATUS "${target} check failed. See ${target}_lib_error.log for details")
-#			file(WRITE "${CONFIG_TESTS_DIR}/${target}_lib_error.log" "${err}")
-			message(STATUS "${target} check failed. Error:\n${err}")
-		endif()
-	endif()
+	set(ADDL_LIB_DIRS "")
+	set(EXTRA_LIBS "")
+	set(EXTRA_FLAGS "")
+	foreach(arg IN ITEMS ${ARGN})
+    	# Append to EXTRA_FLAGS
+    	if(EXTRA_FLAGS STREQUAL "")
+    		set(EXTRA_FLAGS "${arg}")
+    	else()
+    		list(APPEND EXTRA_FLAGS "${arg}")
+    	endif()
+	endforeach()
+    if(NOT "${EXTERNAL_LIB}" STREQUAL "")
+        foreach(lib IN LISTS EXTERNAL_LIB)
+            # If the library starts with "-l", trim it down for find_library (e.g., "-lm" -> "m")
+            string(REGEX MATCH "^-l(.+)" IS_FLAG "${lib}")
+            if(IS_FLAG)
+                string(SUBSTRING "${lib}" 2 -1 lib_CLEAN)
+            else()
+                set(lib_CLEAN "${lib}")
+            endif()
+            find_library(EXTERNAL_LIB_${lib_CLEAN} NAMES "${lib_CLEAN}" "${lib}")            
+            if(NOT EXTERNAL_LIB_${lib_CLEAN})
+                message(STATUS "Library ${lib} not found! Failing ${target} check")
+                return()
+            endif()
+            get_filename_component(lib_DIR "${EXTERNAL_LIB_${lib_CLEAN}}" DIRECTORY)
+			if (ADDL_LIB_DIRS STREQUAL "")
+    			set(ADDL_LIB_DIRS "-L${lib_DIR}")
+    		else()
+    			list(APPEND ADDL_LIB_DIRS "-L${lib_DIR}")
+    		endif()
+    		if (EXTRA_LIBS STREQUAL "")
+    		    set(EXTRA_LIBS "-l${lib_CLEAN}")
+    		else()
+    			list(APPEND EXTRA_LIBS "-l${lib_CLEAN}")
+    		endif()
+        endforeach()
+    endif()
+    check_cc("${target}" "${ARGUMENTS}" CC_RESULT ${EXTRA_LIBS} ${ADDL_LIB_DIRS} ${EXTRA_FLAGS})
+    if(CC_RESULT)
+        set(${RESULT_VAR} 1 PARENT_SCOPE)
+    endif()
 endfunction()
 
 # Rewrite of ffmpeg's check_code function at line 972 of configure script
 function(check_code target compiler headers ARGUMENTS RESULT_VAR)
+	set(EXTRA_FLAGS "")
+	foreach(arg IN ITEMS ${ARGN})
+    	# Append to EXTRA_FLAGS
+    	if(EXTRA_FLAGS STREQUAL "")
+    		set(EXTRA_FLAGS "${arg}")
+    	else()
+    		list(APPEND EXTRA_FLAGS "${arg}")
+    	endif()
+	endforeach()
 	# Check whether more than 1 header file was passed as a function argument
 	list(LENGTH headers len)
 	if (len GREATER 1)
@@ -109,10 +154,10 @@ function(check_code target compiler headers ARGUMENTS RESULT_VAR)
 	set(test_func "check_${compiler}")
 	if (NOT ${test_func} STREQUAL "check_ld")
 		set(TEST_CODE "${HEADERS_STRING}\nint main(void) { ${ARGUMENTS};\nreturn 0; }")
-		cmake_language(CALL ${test_func} ${target} "${TEST_CODE}" ${RESULT_VAR})
+		cmake_language(CALL ${test_func} ${target} "${TEST_CODE}" ${RESULT_VAR} ${EXTRA_FLAGS})
 	else()
-		set(TEST_CODE "${HEADERS_STRING}\nint main(void) { ${ARGUMENTS}\;\nreturn 0\; }")
-		cmake_language(CALL ${test_func} ${target} "${TEST_CODE}" "" ${RESULT_VAR})
+		set(TEST_CODE "${HEADERS_STRING}\nint main(void) { ${ARGUMENTS};\nreturn 0; }")
+		cmake_language(CALL ${test_func} ${target} "${TEST_CODE}" "" ${RESULT_VAR} ${EXTRA_FLAGS})
 	endif()
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
@@ -122,19 +167,20 @@ function(check_header target header flag RESULT_VAR)
 	check_include_file(${header} ${RESULT_VAR} ${flag})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
-#[[ old version
-function(check_header target header flag RESULT_VAR)
-	set(HEADER_STRING "#include <${header}>")
-	set(TEST_CODE "${HEADER_STRING}\nint x\;")
-	check_cxx(${target} ${TEST_CODE} "${flag}" ${RESULT_VAR})
-	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
-endfunction()
-]]
 
 # Rewrite of ffmpeg's check_func function at line 1076 of configure script
 function(check_func target func RESULT_VAR)
-	set(TEST_CODE "extern int ${func}()\;\nint main(void){ ${func}()\; }")
-	check_ld(${target} "${TEST_CODE}" "" ${RESULT_VAR})
+	set(EXTRA_FLAGS "")
+	foreach(arg IN ITEMS ${ARGN})
+    	# Append to EXTRA_FLAGS
+    	if(EXTRA_FLAGS STREQUAL "")
+    		set(EXTRA_FLAGS "${arg}")
+    	else()
+    		list(APPEND EXTRA_FLAGS "${arg}")
+    	endif()
+	endforeach()
+	set(TEST_CODE "extern int ${func}();\nint main(void){ ${func}(); }")
+	check_ld(${target} "${TEST_CODE}" "" ${RESULT_VAR} ${EXTRA_FLAGS})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
 
@@ -142,12 +188,12 @@ endfunction()
 function(check_complexfunc target func RESULT_VAR)
 	set(args1 "f, g")
 	set(args2 "f * I")
-	set(TEST_CODE "#include <complex.h>\n#include <math.h>\nfloat foo(complex float f, complex float g) { return ${func}(${args1})\; }\nint main(void){ return (int) foo\; }")
+	set(TEST_CODE "#include <complex.h>\n#include <math.h>\nfloat foo(complex float f, complex float g) { return ${func}(${args1}); \}\nint main(void){ return (int) foo; \}")
 	check_ld(${target} "${TEST_CODE}" "-lm" ${RESULT_VAR})
 	if (${RESULT_VAR} EQUAL 1)
 		set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 	else()
-		set(TEST_CODE "#include <complex.h>\n#include <math.h>\nfloat foo(complex float f, complex float g) { return ${func}(${args2})\; }\nint main(void){ return (int) foo\; }")
+		set(TEST_CODE "#include <complex.h>\n#include <math.h>\nfloat foo(complex float f, complex float g) { return ${func}(${args2}); \}\nint main(void){ return (int) foo; \}")
 		check_ld(${target} "${TEST_CODE}" "-lm" ${RESULT_VAR})
 		set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 	endif()
@@ -157,13 +203,13 @@ endfunction()
 function(check_mathfunc target func lib RESULT_VAR)
 	set(args1 "f, g")
 	set(args2 "f")
-	set(TEST_CODE "#include <math.h>\nfloat foo(float f, float g) { return ${func}(${args1})\; }\nint main(void){ return (int) foo\; }")
+	if ("${target}" MATCHES "atan2f|copysign|hypot|ldexpf|powf")
+		set(TEST_CODE "#include <math.h>\nfloat foo(float f, float g) { return ${func}(${args1}); }\nint main(void){ return (int) foo; }")
+	else()
+		set(TEST_CODE "#include <math.h>\nfloat foo(float f, float g) { return ${func}(${args2}); }\nint main(void){ return (int) foo; }")
+	endif()
 	check_ld(${target} "${TEST_CODE}" "${lib}" ${RESULT_VAR})
 	if (${RESULT_VAR} EQUAL 1)
-		set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
-	else()
-		set(TEST_CODE "#include <math.h>\nfloat foo(float f, float g) { return ${func}(${args2})\; }\nint main(void){ return (int) foo\; }")
-		check_ld(${target} "${TEST_CODE}" "${lib}" ${RESULT_VAR})
 		set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 	endif()
 endfunction()
@@ -183,12 +229,12 @@ function(check_func_headers target headers funcs lib RESULT_VAR)
 	list(LENGTH funcs len)
 	if (len GREATER 1)
 		foreach(func IN LISTS funcs)
-			string(APPEND FUNCS_STRING "long check_${func}(void) { return (long) ${func}\; }\n")
+			string(APPEND FUNCS_STRING "long check_${func}(void) { return (long) ${func}; }\n")
 		endforeach()
 	else()
-		set(FUNCS_STRING "long check_${funcs}(void) { return (long) ${funcs}\; }\n")
+		set(FUNCS_STRING "long check_${funcs}(void) { return (long) ${funcs}; }\n")
 	endif()
-	set(TEST_CODE "${HEADERS_STRING}\n${FUNCS_STRING}\nint main(void) { return 0\; }")
+	set(TEST_CODE "${HEADERS_STRING}\n${FUNCS_STRING}\nint main(void) { return 0; }")
 	check_ld(${target} "${TEST_CODE}" "${lib}" ${RESULT_VAR})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 	# To Do: in ffmpeg's configure script, some results prompt adding additional system libs.
@@ -202,8 +248,8 @@ endfunction()
 function(check_cpp_condition target header condition RESULT_VAR)
 	set(HEADER_STRING "#include <${header}>")
 	set(CONDITION_STRING "#if !\(${condition})\n#error \"unsatisfied condition: ${condition}\"\n#endif")
-	set(TEST_CODE "${HEADER_STRING}\n${CONDITION_STRING}\nint x\;")
-	check_cxx(${target} ${TEST_CODE} "" ${RESULT_VAR})
+	set(TEST_CODE "${HEADER_STRING}\n${CONDITION_STRING}\nint x;")
+	check_cc(${target} ${TEST_CODE} ${RESULT_VAR})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
 
@@ -214,7 +260,7 @@ function(check_lib target header func flag RESULT_VAR)
 	set(HEADER_RESULT_VAR "HEADER_${RESULT_VAR}")
 	check_header("${target}_header" "${HEADER_STRING}" "${flag}" ${HEADER_RESULT_VAR})
 	if (${HEADER_RESULT_VAR} EQUAL 1)
-		check_func(${target} "${func}" ${RESULT_VAR})
+		check_func(${target} "${func}" ${RESULT_VAR} ${flag})
 	endif()
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
@@ -229,21 +275,29 @@ endfunction()
 function(check_type target headers type RESULT_VAR)
 	check_code(${target} cc "${headers}" "${type} v" ${RESULT_VAR})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
-	# Note: configure actually runs 'enable_safe' on "${type}" if the check passes
 endfunction()
 
 # Rewrite of ffmpeg's check_struct function at line 1246 of configure script
 function(check_struct target headers struct member RESULT_VAR)
-	check_code(${target} cc "${headers}" "const void *p = &((${struct} *)0)->${member}" ${RESULT_VAR})
+	set(EXTRA_FLAGS "")
+	foreach(arg IN ITEMS ${ARGN})
+    	# Append to EXTRA_FLAGS
+    	if(EXTRA_FLAGS STREQUAL "")
+    		set(EXTRA_FLAGS "${arg}")
+    	else()
+    		list(APPEND EXTRA_FLAGS "${arg}")
+    	endif()
+	endforeach()
+	check_code(${target} cc "${headers}" "const void *p = &((${struct} *)0)->${member}" ${RESULT_VAR} ${EXTRA_FLAGS})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
-	# Note: configure actually runs 'enable_safe' on "${struct}_${member}" if the check passes
 endfunction()
 
 # Rewrite of ffmpeg's check_builtin function at line 1257 of configure script
 function(check_builtin target headers builtin RESULT_VAR)
 	check_code(${target} ld "${headers}" "${builtin}" ${RESULT_VAR})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
-	# Note: configure actually invokes check_code with an incorrect/extra number of arguments!
+	# Note: configure actually invokes check_code with an extra argument!
+	# Of course, now that we've refactored check_cc to accept optional arguments, we could deal with this here
 endfunction()
 
 # convenience function at the end that sets any truthy variables to "1" and any falsy variables to "0"

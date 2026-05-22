@@ -1,7 +1,5 @@
 # Before we compile ffmpeg libs, we need to generate config.h, (config.asm if enabling Assembly optimizations), libavutil/avconfig.h, and libavutil/ffversion.h.
 
-include(CheckIncludeFile)
-
 include(configure_functions.cmake)
 
 # Check for extern_prefix
@@ -77,14 +75,14 @@ check_cc(attribute_may_alias "union { int x; } __attribute__((may_alias)) x;" HA
 
 check_func(dlopen "dlopen" HAVE_DLOPEN)
 
-check_builtin(atomic_cas_ptr "<atomic.h>" "void **ptr\; void *oldval, *newval\; atomic_cas_ptr(ptr, oldval, newval)" HAVE_ATOMIC_CAS_PTR)
-check_builtin(atomic_compare_exchange "" "int *ptr, *oldval\; int newval\; __atomic_compare_exchange_n(ptr, oldval, newval, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)" HAVE_ATOMIC_COMPARE_EXCHANGE)
+check_builtin(atomic_cas_ptr "<atomic.h>" "void **ptr; void *oldval, *newval; atomic_cas_ptr(ptr, oldval, newval)" HAVE_ATOMIC_CAS_PTR)
+check_builtin(atomic_compare_exchange "" "int *ptr, *oldval; int newval; __atomic_compare_exchange_n(ptr, oldval, newval, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)" HAVE_ATOMIC_COMPARE_EXCHANGE)
 check_builtin(machine_rw_barrier "<mbarrier.h>" "__machine_rw_barrier()" HAVE_MACHINE_RW_BARRIER)
 check_builtin(MemoryBarrier "<windows.h>" "MemoryBarrier()" HAVE_MEMORYBARRIER)
 check_builtin(sarestart "<signal.h>" "SA_RESTART" HAVE_SARESTART)
-check_builtin(sync_val_compare_and_swap "" "int *ptr\; int oldval, newval\; __sync_val_compare_and_swap(ptr, oldval, newval)" HAVE_SYNC_VAL_COMPARE_AND_SWAP)
-check_builtin(gmtime_r "<time.h>" "time_t *time\; struct tm *tm\; gmtime_r(time, tm)" HAVE_GMTIME_R)
-check_builtin(localtime_r "<time.h>" "time_t *time\; struct tm *tm\; localtime_r(time, tm)" HAVE_LOCALTIME_R)
+check_builtin(sync_val_compare_and_swap "" "int *ptr; int oldval, newval; __sync_val_compare_and_swap(ptr, oldval, newval)" HAVE_SYNC_VAL_COMPARE_AND_SWAP)
+check_builtin(gmtime_r "<time.h>" "time_t *time; struct tm *tm; gmtime_r(time, tm)" HAVE_GMTIME_R)
+check_builtin(localtime_r "<time.h>" "time_t *time; struct tm *tm; localtime_r(time, tm)" HAVE_LOCALTIME_R)
 
 check_func_headers(aligned_malloc "<malloc.h>" "_aligned_malloc" "" HAVE_ALIGNED_MALLOC)
 # Note: we don't have a 'custom_allocator' option set, so we don't need a malloc_prefix
@@ -120,10 +118,8 @@ if (NOT HAVE_NANOSLEEP)
 endif()
 check_func(sched_getaffinity "sched_getaffinity" HAVE_SCHED_GETAFFINITY)
 check_func(setrlimit "setrlimit" HAVE_SETRLIMIT)
-check_struct(st_mtim.tv_nsec "<sys/stat.h>" "struct stat" st_mtim.tv_nsec HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC)
-# To Do: check the above; in ffmpeg's configure script, there's a -D_BSD_SOURCE compiler flag added to the end. 
-# That's been deprecated since 2014 and the new flag is -D_DEFAULT_SOURCE to enable various extensions to POSIX
-# This is the only time a compiler flag is passed to check_struct() so I'm loathe to refactor just for this one check
+check_struct(st_mtim.tv_nsec "<sys/stat.h>" "struct stat" st_mtim.tv_nsec HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC "-D_DEFAULT_SOURCE")
+# Note: -D_DEFAULT_SOURCE replaced -D_BSD_SOURCE as a flag to enable various extensions to POSIX in 2014
 check_func(strerror_r "strerror_r" HAVE_STRERROR_R)
 check_func(sysconf "sysconf" HAVE_SYSCONF)
 check_func(sysctl "sysctl" HAVE_SYSCTL)
@@ -234,9 +230,7 @@ check_type(ibasefilter "<dshow.h>" "IBaseFilter" CONFIG_DSHOW_INDEV)	# Note: not
 check_header(sndio "sndio.h" "" HAVE_SNDIO_H)
 check_struct(audio_buf_info "<sys/soundcard.h>" "audio_buf_info bytes;" "audio_buf_info bytes" HAVE_SYS_SOUNDCARD_H)
 if (NOT HAVE_SYS_SOUNDCARD_H)
-	check_cc(sys_soundcard "#include <sys/soundcard.h>\naudio_buf_info abc;" HAVE_SYS_SOUNDCARD_H)
-	# To Do: should deal with "add_cppflags -D__BSD_VISIBLE -D__XSI_VISIBLE" although this fallback check passes
-	# on my system even without them; if they're needed, the check also needs to be modified to accept them as flags
+	check_cc(sys_soundcard "#include <sys/soundcard.h>\naudio_buf_info abc;" HAVE_SYS_SOUNDCARD_H "-D__BSD_VISIBLE;-D__XSI_VISIBLE")
 endif()
 check_header(soundcard "soundcard.h" "" HAVE_SOUNDCARD_H)
 
@@ -247,7 +241,7 @@ if (CONFIG_XLIB)
 endif()
 
 # dxva2api_h - see line 5755
-check_cc(dxva2api_cobj "#define _WIN32_WINNT 0x0600\n#define COBJMACROS\n#include <windows.h>\n#include <d3d9.h>\n#include <dxva2api.h>\nint main(void) { IDirectXVideoDecoder *o = NULL; IDirectXVideoDecoder_Release(o); return 0; }" HAVE_DXVA2API_COBJ)
+check_cc(dxva2api_cobj "#include <windows.h>\n#include <d3d9.h>\n#include <dxva2api.h>\n#define _WIN32_WINNT 0x0600\n#define COBJMACROS\nint main(void) { IDirectXVideoDecoder *o = NULL;\nIDirectXVideoDecoder_Release(o);\nreturn 0; }" HAVE_DXVA2API_COBJ)
 
 # Threads - see line 6045
 if (HAVE_SYNC_VAL_COMPARE_AND_SWAP OR HAVE_ATOMIC_COMPARE_EXCHANGE)
