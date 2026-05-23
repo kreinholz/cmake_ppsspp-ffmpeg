@@ -120,6 +120,7 @@ check_func(sched_getaffinity "sched_getaffinity" HAVE_SCHED_GETAFFINITY)
 check_func(setrlimit "setrlimit" HAVE_SETRLIMIT)
 check_struct(st_mtim.tv_nsec "<sys/stat.h>" "struct stat" st_mtim.tv_nsec HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC "-D_DEFAULT_SOURCE")
 # Note: -D_DEFAULT_SOURCE replaced -D_BSD_SOURCE as a flag to enable various extensions to POSIX in 2014
+# Note 2: on Arch Linux at least, this is already defined in features.h, resulting in a -Wmacro-redefined warning
 check_func(strerror_r "strerror_r" HAVE_STRERROR_R)
 check_func(sysconf "sysconf" HAVE_SYSCONF)
 check_func(sysctl "sysctl" HAVE_SYSCTL)

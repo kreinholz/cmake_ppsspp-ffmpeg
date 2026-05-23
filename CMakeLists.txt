@@ -30,8 +30,8 @@ endif()
 # https://gitlab.freedesktop.org/gstreamer/meson-ports/ffmpeg/-/blob/meson-4.4/meson.build?ref_type=heads
 if (MSVC)
 	add_compile_options(/WO4005 /WD4018 /WD4146 /WD4244 /WD4305 /WD4554 /WD4114 /WD4028 /WD4090 /WD4133)
-else()
-	add_compile_options(-D_ISOC99_SOURCE -D_GNU_SOURCE -D_LARGEFILE_SOURCE -DPIC -Wno-parentheses -Wno-pointer-sign -Wno-switch -Wno-format-truncation -Wno-deprecated-declarations -Wno-unused-function -Wno-uninitialized -Wno-ignored-qualifiers -Wno-unused-variable -Wno-bool-operation -Wno-incompatible-pointer-types -Wno-address -Wno-string-plus-int -Wno-empty-body -Wno-implicit-const-int-float-conversion)
+else()	# Note: these are geared toward LLVM; should break out and use GCC equivalents where warranted
+	add_compile_options(-D_LARGEFILE_SOURCE -DPIC -Wno-parentheses -Wno-pointer-sign -Wno-switch -Wno-format-truncation -Wno-deprecated-declarations -Wno-unused-function -Wno-uninitialized -Wno-ignored-qualifiers -Wno-unused-variable -Wno-bool-operation -Wno-incompatible-pointer-types -Wno-address -Wno-string-plus-int -Wno-empty-body -Wno-implicit-const-int-float-conversion)
 endif()
 
 # Hacky override of arch-specific linker errors on Linux builds...config.h options not being honored for this 1 issue
