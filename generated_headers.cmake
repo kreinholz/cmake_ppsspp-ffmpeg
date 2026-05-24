@@ -3,9 +3,9 @@
 include(configure_functions.cmake)
 
 # Check for extern_prefix
-check_cc(ff_extern "int ff_extern;" HAVE_ff_extern)
+check_cc(ffextern "int ff_extern;" HAVE_ff_extern)
 execute_process(
-    COMMAND nm "${CONFIG_TESTS_DIR}/ff_extern.o"
+    COMMAND nm "${CONFIG_TESTS_DIR}/ffextern.o"
     OUTPUT_VARIABLE NM_RESULT
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
@@ -116,14 +116,20 @@ if (NOT HAVE_NANOSLEEP)
 			add_link_options(-lrt)
 		endif()
 endif()
-check_func(sched_getaffinity "sched_getaffinity" HAVE_SCHED_GETAFFINITY)
+if (NOT MSVC AND NOT MINGW)	# Workaround for this check erroneously passing if cross-compiling for Windows target
+	check_func(sched_getaffinity "sched_getaffinity" HAVE_SCHED_GETAFFINITY)
+endif()
 check_func(setrlimit "setrlimit" HAVE_SETRLIMIT)
 check_struct(st_mtim.tv_nsec "<sys/stat.h>" "struct stat" st_mtim.tv_nsec HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC "-D_DEFAULT_SOURCE")
 # Note: -D_DEFAULT_SOURCE replaced -D_BSD_SOURCE as a flag to enable various extensions to POSIX in 2014
 # Note 2: on Arch Linux at least, this is already defined in features.h, resulting in a -Wmacro-redefined warning
-check_func(strerror_r "strerror_r" HAVE_STRERROR_R)
+if (NOT MSVC AND NOT MINGW)	# Workaround for this check erroneously passing if cross-compiling for Windows target
+	check_func(strerror_r "strerror_r" HAVE_STRERROR_R)
+endif()
 check_func(sysconf "sysconf" HAVE_SYSCONF)
-check_func(sysctl "sysctl" HAVE_SYSCTL)
+if (NOT MSVC AND NOT MINGW)	# Workaround for this check erroneously passing if cross-compiling for Windows target
+	check_func(sysctl "sysctl" HAVE_SYSCTL)
+endif()
 check_func(usleep "usleep" HAVE_USLEEP)
 
 check_func_headers(kbhit "<conio.h>" "kbhit" "" HAVE_KBHIT)
