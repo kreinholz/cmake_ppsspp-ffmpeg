@@ -65,14 +65,36 @@ function(check_cc target ARGUMENTS RESULT_VAR)
 	set(TEST_SOURCE "${CONFIG_TESTS_DIR}/${target}.c")
 	file(WRITE "${TEST_SOURCE}" "${ARGUMENTS}")
 	set(OUTPUT_OBJ "${CONFIG_TESTS_DIR}/${target}.o")
-	try_compile(COMPILE_RESULT
-		"${CONFIG_TESTS_DIR}"
-		"${TEST_SOURCE}"
-		COMPILE_DEFINITIONS ${COMPILE_INCLUDES} ${EXTRA_FLAGS}
-		LINK_LIBRARIES ${ADDL_LIB_DIRS} ${EXTRA_LIBS}
-		COPY_FILE "${OUTPUT_OBJ}"
-		OUTPUT_VARIABLE compile_log
-	)
+	if (CMAKE_CROSSCOMPILING)
+    	# Check for a header unique to your FreeBSD host
+    	check_include_file("sys/jail.h" HOST_LEAK_DETECTED)
+    	
+    	if(HOST_LEAK_DETECTED)
+        	message(FATAL_ERROR 
+            	"CRITICAL: Host system headers are leaking into the cross-compilation environment!\n"
+            	"CMake discovered FreeBSD host headers while targeting ${CMAKE_SYSTEM_NAME}.\n"
+            	"Please ensure your CMAKE_SYSROOT is valid: ${CMAKE_SYSROOT}"
+        	)
+    	endif()
+		try_compile(COMPILE_RESULT
+			"${CONFIG_TESTS_DIR}"
+			"${TEST_SOURCE}"
+			CMAKE_FLAGS "-DCMAKE_SYSROOT=${CMAKE_SYSROOT}"
+			COMPILE_DEFINITIONS ${COMPILE_INCLUDES} ${EXTRA_FLAGS}
+			LINK_LIBRARIES ${ADDL_LIB_DIRS} ${EXTRA_LIBS}
+			COPY_FILE "${OUTPUT_OBJ}"
+			OUTPUT_VARIABLE compile_log
+		)
+	else()
+		try_compile(COMPILE_RESULT
+			"${CONFIG_TESTS_DIR}"
+			"${TEST_SOURCE}"
+			COMPILE_DEFINITIONS ${COMPILE_INCLUDES} ${EXTRA_FLAGS}
+			LINK_LIBRARIES ${ADDL_LIB_DIRS} ${EXTRA_LIBS}
+			COPY_FILE "${OUTPUT_OBJ}"
+			OUTPUT_VARIABLE compile_log
+		)
+	endif()
 	if(COMPILE_RESULT)
     	message(STATUS "${target} check passed")
 		set(${RESULT_VAR} 1 PARENT_SCOPE)
@@ -164,6 +186,18 @@ endfunction()
 
 # Rewrite of ffmpeg's check_header function at line 1053 of configure script
 function(check_header target header flag RESULT_VAR)
+	if (CMAKE_CROSSCOMPILING)
+    	# Check for a header unique to your FreeBSD host
+    	check_include_file("sys/jail.h" HOST_LEAK_DETECTED)
+    	
+    	if(HOST_LEAK_DETECTED)
+        	message(FATAL_ERROR 
+            	"CRITICAL: Host system headers are leaking into the cross-compilation environment!\n"
+            	"CMake discovered FreeBSD host headers while targeting ${CMAKE_SYSTEM_NAME}.\n"
+            	"Please ensure your CMAKE_SYSROOT is valid: ${CMAKE_SYSROOT}"
+        	)
+    	endif()
+    endif()
 	check_include_file(${header} ${RESULT_VAR} ${flag})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
@@ -189,12 +223,20 @@ function(check_complexfunc target func RESULT_VAR)
 	set(args1 "f, g")
 	set(args2 "f * I")
 	set(TEST_CODE "#include <complex.h>\n#include <math.h>\nfloat foo(complex float f, complex float g) { return ${func}(${args1}); \}\nint main(void){ return (int) foo; \}")
-	check_ld(${target} "${TEST_CODE}" "-lm" ${RESULT_VAR})
+	if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND NOT MINGW)
+		check_ld(${target} "${TEST_CODE}" "-lmsvcrt" ${RESULT_VAR})
+	else()
+		check_ld(${target} "${TEST_CODE}" "-lm" ${RESULT_VAR})
+	endif()
 	if (${RESULT_VAR} EQUAL 1)
 		set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 	else()
 		set(TEST_CODE "#include <complex.h>\n#include <math.h>\nfloat foo(complex float f, complex float g) { return ${func}(${args2}); \}\nint main(void){ return (int) foo; \}")
-		check_ld(${target} "${TEST_CODE}" "-lm" ${RESULT_VAR})
+		if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND NOT MINGW)
+			check_ld(${target} "${TEST_CODE}" "-lmsvcrt" ${RESULT_VAR})
+		else()
+			check_ld(${target} "${TEST_CODE}" "-lm" ${RESULT_VAR})
+		endif()
 		set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 	endif()
 endfunction()
@@ -249,7 +291,7 @@ function(check_cpp_condition target header condition RESULT_VAR)
 	set(HEADER_STRING "#include <${header}>")
 	set(CONDITION_STRING "#if !\(${condition})\n#error \"unsatisfied condition: ${condition}\"\n#endif")
 	set(TEST_CODE "${HEADER_STRING}\n${CONDITION_STRING}\nint x;")
-	check_cc(${target} ${TEST_CODE} ${RESULT_VAR})
+	check_cc(${target} "${TEST_CODE}" ${RESULT_VAR})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
 

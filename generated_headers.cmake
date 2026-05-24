@@ -63,8 +63,7 @@ set(CC_IDENT \"${CC_IDENT}\")
 # Check for PIC - see line 4845 of ffmpeg's configure script
 set(CONFIG_PIC 1)
 #check_cpp_condition(pic "stdlib.h" "defined(__PIC__) || defined(__pic__) || defined(PIC)" CONFIG_PIC)
-# FIXME: ffmpeg's configure script gets passing test results on my system--yet this check fails; but it's clearly not defined in stdlib.h so I don't know how it passed with ffmpeg's configure!
-# For now, default to "1" since the vast majority of build environments support/require PIC
+# Note: the above check PASSES if cross-compiling for Windows targets, but fails for FreeBSD host; enabling always
 
 # Line 4933
 check_cc(pragma_deprecated [[void foo(void) { _Pragma("GCC diagnostic ignored \"-Wdeprecated-declarations\"") }]] HAVE_PRAGMA_DEPRECATED)
@@ -179,8 +178,8 @@ check_header(termios "sys/termios.h" "" HAVE_TERMIOS_H)
 check_header(unistd "sys/unistd.h" "" HAVE_UNISTD_H)
 check_header(valgrind "valgrind/valgrind.h" "" HAVE_VALGRIND_VALGRIND_H)
 
-# Line 5362
-check_lib2(commandlinetoargvw "<windows.h>;<shellapi.h>" "CommandLineToArgvW" "-shell32" HAVE_COMMANDLINETOARGVW)
+# Line 5362	# NOTE: on Windows, "shell32.lib" does NOT start with "lib" or "-l", but for check purposes we need this
+check_lib2(commandlinetoargvw "<windows.h>;<shellapi.h>" "CommandLineToArgvW" "-lshell32" HAVE_COMMANDLINETOARGVW)
 check_lib2(cryptgenrandom "<windows.h>;<wincrypt.h>" "CryptGenRandom" "-ladvapi32" HAVE_CRYPTGENRANDOM)
 check_lib2(getprocessmemoryinfo "<windows.h>;<psapi.h>" "GetProcessMemoryInfo" "-lpsapi" HAVE_GETPROCESSMEMORYINFO)
 check_lib(utgetostypefromstring "CoreServices/CoreServices.h" "UTGetOSTypeFromString" "-framework CoreServices" HAVE_UTGETOSTYPEFROMSTRING)
@@ -221,7 +220,11 @@ set(mathfuncs "atanf;atan2f;cbrt;cbrtf;copysign;cosf;erf;exp2;exp2f;expf;hypot;i
 
 foreach(func IN LISTS mathfuncs)
 	string(TOUPPER ${func} uppercase_func)
-	check_mathfunc(${func} ${func} "-lm" HAVE_${uppercase_func})
+	if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND NOT MINGW)
+		check_mathfunc(${func} ${func} "-lmsvcrt" HAVE_${uppercase_func})
+	else()
+		check_mathfunc(${func} ${func} "-lm" HAVE_${uppercase_func})
+	endif()
 endforeach()
 
 # check all listed complex_funcs - see lines 5438-5440. Note: there are only 2, so no need to iterate through a list
