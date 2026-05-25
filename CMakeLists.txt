@@ -21,9 +21,12 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND CMAKE_C_COMPILER_TARGET MATCHES 
 endif()
 
 # Set some flags needed to for ffmpeg internal checks
-if (IOS)
+if (APPLE)
 	set(ADDL_INCLUDES -I${CMAKE_OSX_SYSROOT}/usr/include)
 	set(ADDL_LIB_DIRS -L${CMAKE_OSX_SYSROOT}/usr/lib)
+elseif (ANDROID)
+	set(ADDL_INCLUDES -I${CMAKE_SYSROOT}/usr/include)
+	set(ADDL_LIB_DIRS -L${CMAKE_SYSROOT}/usr/lib/${CMAKE_ANDROID_ARCH_TRIPLE}/${CMAKE_SYSTEM_VERSION})
 elseif (CMAKE_CROSSCOMPILING)
 	set(ADDL_INCLUDES --sysroot="${CMAKE_SYSROOT}")
 	set(ADDL_LIB_DIRS --sysroot="${CMAKE_SYSROOT}")
@@ -45,10 +48,17 @@ if (CMAKE_C_COMPILER_ID STREQUAL "Clang")	# additional options not recognized by
 endif()
 
 # Hacky override of arch-specific linker errors on Linux builds...config.h options not being honored for this 1 issue
-#add_compile_options(-DARCH_X86=0 -DARCH_ARM=0 -DARCH_MIPS=0)
-unset(ARCH_X86 CACHE)
-unset(ARCH_ARM CACHE)
-unset(ARCH_MIPS CACHE)
+set(ARCH_X86 "" CACHE INTERNAL "")
+set(ARCH_ARM "" CACHE INTERNAL "")
+set(ARCH_MIPS "" CACHE INTERNAL "")
+# Failsafe
+set(ARCH_X86 "")
+set(ARCH_ARM "")
+set(ARCH_MIPS "")
+# Another failsafe
+remove_definitions(-DARCH_X86)
+remove_definitions(-DARCH_ARM)
+remove_definitions(-DARCH_MIPS)
 
 # To Do - conditionally apply additional compile_options based on the build target if needed
 
