@@ -27,7 +27,7 @@ set(build_suffix \"\")
 set(SLIBSUF \"${CMAKE_SHARED_LIBRARY_SUFFIX}\")
 
 set(sws_max_filter_size 256)
-# See line 3055 where 256 is hardcoded as the default
+# See line 3055 of ffmpeg configure script, where 256 is hardcoded as the default
 
 # Check the restrict keyword and assign accordingly
 set(_RESTRICT)
@@ -86,7 +86,9 @@ check_builtin(localtime_r "<time.h>" "time_t *time; struct tm *tm; localtime_r(t
 check_func_headers(aligned_malloc "<malloc.h>" "_aligned_malloc" "" HAVE_ALIGNED_MALLOC)
 # Note: we don't have a 'custom_allocator' option set, so we don't need a malloc_prefix
 check_func(memalign "memalign" HAVE_MEMALIGN)
-check_func(posix_memalign "posix_memalign" HAVE_POSIX_MEMALIGN)
+if (NOT MINGW AND NOT MINGW_SYSROOT)	# First of many MinGW-specific conditionals to prevent false-positives
+	check_func(posix_memalign "posix_memalign" HAVE_POSIX_MEMALIGN)
+endif()
 check_func(access "access" HAVE_ACCESS)
 check_func_headers(arc4random "<stdlib.h>" "arc4random" "" HAVE_ARC4RANDOM)
 check_func_headers(clock_gettime "<time.h>" "clock_gettime" "" HAVE_CLOCK_GETTIME)
@@ -96,17 +98,25 @@ if (NOT HAVE_CLOCK_GETTIME)
 			add_link_options(-lrt)
 		endif()
 endif()
-check_func(fcntl "fcntl" HAVE_FCNTL)
+if (NOT MINGW AND NOT MINGW_SYSROOT)
+	check_func(fcntl "fcntl" HAVE_FCNTL)
+endif()
 check_func(flt_lim "flt_lim" HAVE_FLT_LIM)	# Note: if this check fails, a second check is run later that can pass
 check_func(fork "fork" HAVE_FORK)
-check_func(gethrtime "gethrtime" HAVE_GETHRTIME)
+if (NOT MINGW AND NOT MINGW_SYSROOT)
+	check_func(gethrtime "gethrtime" HAVE_GETHRTIME)
+endif()
 check_func(getopt "getopt" HAVE_GETOPT)
 check_func(getrusage "getrusage" HAVE_GETRUSAGE)
 check_func(gettimeofday "gettimeofday" HAVE_GETTIMEOFDAY)
 check_func(isatty "isatty" HAVE_ISATTY)
-check_func(mach_absolute_time "mach_absolute_time" HAVE_MACH_ABSOLUTE_TIME)
+if (NOT MINGW AND NOT MINGW_SYSROOT)
+	check_func(mach_absolute_time "mach_absolute_time" HAVE_MACH_ABSOLUTE_TIME)
+endif()
 check_func(mkstemp "mkstemp" HAVE_MKSTEMP)
-check_func(mmap "mmap" HAVE_MMAP)
+if (NOT MINGW AND NOT MINGW_SYSROOT)
+	check_func(mmap "mmap" HAVE_MMAP)
+endif()
 check_func(mprotect "mprotect" HAVE_MPROTECT)
 check_func_headers(nanosleep "<time.h>" "nanosleep" "" HAVE_NANOSLEEP)
 if (NOT HAVE_NANOSLEEP)
@@ -115,14 +125,20 @@ if (NOT HAVE_NANOSLEEP)
 			add_link_options(-lrt)
 		endif()
 endif()
-check_func(sched_getaffinity "sched_getaffinity" HAVE_SCHED_GETAFFINITY)
+if (NOT MINGW AND NOT MINGW_SYSROOT)	# Failsafe against breaking MinGW builds at libavutil/cpu.c
+	check_func(sched_getaffinity "sched_getaffinity" HAVE_SCHED_GETAFFINITY)
+endif()
 check_func(setrlimit "setrlimit" HAVE_SETRLIMIT)
 check_struct(st_mtim.tv_nsec "<sys/stat.h>" "struct stat" st_mtim.tv_nsec HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC "-D_DEFAULT_SOURCE")
 # Note: -D_DEFAULT_SOURCE replaced -D_BSD_SOURCE as a flag to enable various extensions to POSIX in 2014
 # Note 2: on Arch Linux at least, this is already defined in features.h, resulting in a -Wmacro-redefined warning
-check_func(strerror_r "strerror_r" HAVE_STRERROR_R)
+if (NOT MINGW AND NOT MINGW_SYSROOT)
+	check_func(strerror_r "strerror_r" HAVE_STRERROR_R)
+endif()
 check_func(sysconf "sysconf" HAVE_SYSCONF)
-check_func(sysctl "sysctl" HAVE_SYSCTL)
+if (NOT MINGW AND NOT MINGW_SYSROOT)
+	check_func(sysctl "sysctl" HAVE_SYSCTL)
+endif()
 check_func(usleep "usleep" HAVE_USLEEP)
 
 check_func_headers(kbhit "<conio.h>" "kbhit" "" HAVE_KBHIT)
@@ -156,7 +172,7 @@ check_header(dirent "dirent.h" "" HAVE_DIRENT_H)
 check_header(dlfcn "dlfcn.h" "" HAVE_DLFCN_H)
 check_header(d3d11 "d3d11.h" "" HAVE_D3D11_H)
 check_header(dxva "dxva.h" "" HAVE_DXVA_H)
-check_header(dxva2api "dxva2api.h" "-D_WIN32_WINNT=0x0600" HAVE_DXVA2API_H)
+check_header(dxva2api "windows.h;d3d9.h;dxva2api.h" "-D_WIN32_WINNT=0x0600" CONFIG_DXVA2)
 check_header(io "io.h" "" HAVE_IO_H)
 check_header(mach_time "mach/mach_time.h" "" HAVE_MACH_MACH_TIME_H)
 check_header(malloc "malloc.h" "" HAVE_MALLOC_H)
@@ -177,7 +193,7 @@ check_lib2(commandlinetoargvw "<windows.h>;<shellapi.h>" "CommandLineToArgvW" "-
 check_lib2(cryptgenrandom "<windows.h>;<wincrypt.h>" "CryptGenRandom" "-ladvapi32" HAVE_CRYPTGENRANDOM)
 check_lib2(getprocessmemoryinfo "<windows.h>;<psapi.h>" "GetProcessMemoryInfo" "-lpsapi" HAVE_GETPROCESSMEMORYINFO)
 check_lib(utgetostypefromstring "CoreServices/CoreServices.h" "UTGetOSTypeFromString" "-framework CoreServices" HAVE_UTGETOSTYPEFROMSTRING)
-# To Do: the above check passes the compiler flag to the embedded check_header call but not to check_func
+
 check_struct(ru_maxrss "<sys/time.h>;<sys/resource.h>" "struct rusage" ru_maxrss HAVE_STRUCT_RUSAGE_RU_MAXRSS)
 
 check_cpp_condition(winrt "windows.h" "!WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)" HAVE_WINRT)
@@ -195,18 +211,12 @@ endif()
 # pthreads - see lines 5391-5414
 if (NOT HAVE_W32THREADS AND NOT HAVE_OS2THREADS)
 	check_func(pthread_join "pthread_join" HAVE_PTHREAD_JOIN)	# may need to modify check_func to add a lib arg
-#	check_func(pthread_create "pthread_create" HAVE_PTHREAD_CREATE) # we haven't set any cflags or extralibs
 	check_func(pthread_cancel "pthread_cancel" HAVE_PTHREAD_CANCEL)
 	if (HAVE_PTHREAD_JOIN AND HAVE_PTHREAD_CANCEL)
 		set(HAVE_PTHREADS 1)
 	endif()
 endif()
-# To Do: address setting of cflags, extralibs, checks involving linked libs that check_func doesn't currently allow
-# FIXME: the second check, for pthread_create, currently fails with linker error 'ld: error: undefined symbol: pthread_create'. For now, commented out. The final conditional is supposed to look for all 3 but if we have pthread_join and pthread_cancel, realistically we have pthreads. PPSSPP also has a cmake check for pthreads
 
-# Note: the following checks at lines 5421-5423 require a lib argument; ffmpeg's configure uses check_lib for the
-# first check, which fails due to lack of a lib argument. Using check_lib2 instead. This check SHOULD always pass
-# since PPSSPP requires zlib
 check_lib2(zlibversion "<zlib.h>" "zlibVersion" "-lz" CONFIG_ZLIB)
 
 # check all listed math_funcs - see lines 5434-5436
@@ -221,7 +231,7 @@ foreach(func IN LISTS mathfuncs)
 	endif()
 endforeach()
 
-# check all listed complex_funcs - see lines 5438-5440. Note: there are only 2, so no need to iterate through a list
+# check all listed complex_funcs - see lines 5438-5440
 check_complexfunc(cabs cabs HAVE_CABS)
 check_complexfunc(cexp cexp HAVE_CEXP)
 
@@ -244,8 +254,13 @@ if (CONFIG_XLIB)
 	set(HAVE_XLIB 1)
 endif()
 
-# dxva2api_h - see line 5755
-check_cc(dxva2api_cobj "#include <windows.h>\n#include <d3d9.h>\n#include <dxva2api.h>\n#define _WIN32_WINNT 0x0600\n#define COBJMACROS\nint main(void) { IDirectXVideoDecoder *o = NULL;\nIDirectXVideoDecoder_Release(o);\nreturn 0; }" HAVE_DXVA2API_COBJ)
+# dxva2api_cobj - see line 5755
+check_cc(dxva2api_cobj "#define _WIN32_WINNT 0x0600\n#define COBJMACROS\n#include <windows.h>\n#include <d3d9.h>\n#include <dxva2api.h>\nint main(void) { IDirectXVideoDecoder *o = NULL;\nIDirectXVideoDecoder_Release(o);\nreturn 0; }" HAVE_DXVA2API_COBJ)
+
+# dxva2_lib - see line 6053
+if (CONFIG_DXVA2 AND HAVE_DXVA2API_COBJ AND HAVE_COTASKMEMFREE)
+	set(HAVE_DXVA2_LIB 1)
+endif()
 
 # Threads - see line 6045
 if (HAVE_SYNC_VAL_COMPARE_AND_SWAP OR HAVE_ATOMIC_COMPARE_EXCHANGE)

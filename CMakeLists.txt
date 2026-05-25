@@ -13,6 +13,13 @@ set(LIBAVUTIL_SRC_DIR ${SRC_DIR}/libavutil)
 set(LIBSWRESAMPLE_SRC_DIR ${SRC_DIR}/libswresample)
 set(LIBSWSCALE_SRC_DIR ${SRC_DIR}/libswscale)
 
+# Check for exotic cross-compiling configurations such e.g. MinGW sysroot with clang compiler
+if(WIN32 AND NOT MSVC)
+	set(MINGW_SYSROOT TRUE)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND CMAKE_C_COMPILER_TARGET MATCHES "mingw")
+	set(MINGW_SYSROOT TRUE)
+endif()
+
 # Set some flags needed to for ffmpeg internal checks
 if (IOS)
 	set(ADDL_INCLUDES -I${CMAKE_OSX_SYSROOT}/usr/include)
@@ -30,12 +37,18 @@ endif()
 # https://gitlab.freedesktop.org/gstreamer/meson-ports/ffmpeg/-/blob/meson-4.4/meson.build?ref_type=heads
 if (MSVC)
 	add_compile_options(/WO4005 /WD4018 /WD4146 /WD4244 /WD4305 /WD4554 /WD4114 /WD4028 /WD4090 /WD4133)
-else()	# Note: these are geared toward LLVM; should break out and use GCC equivalents where warranted
-	add_compile_options(-D_LARGEFILE_SOURCE -DPIC -Wno-parentheses -Wno-pointer-sign -Wno-switch -Wno-format-truncation -Wno-deprecated-declarations -Wno-unused-function -Wno-uninitialized -Wno-ignored-qualifiers -Wno-unused-variable -Wno-bool-operation -Wno-incompatible-pointer-types -Wno-address -Wno-string-plus-int -Wno-empty-body -Wno-implicit-const-int-float-conversion)
+else()	# Compiler options for both clang and gcc
+	add_compile_options(-D_LARGEFILE_SOURCE -DPIC -Wno-parentheses -Wno-pointer-sign -Wno-switch -Wno-format-truncation -Wno-deprecated-declarations -Wno-unused-function -Wno-uninitialized -Wno-ignored-qualifiers -Wno-unused-variable -Wno-bool-operation -Wno-incompatible-pointer-types -Wno-address -Wno-empty-body)
+endif()
+if (CMAKE_C_COMPILER_ID STREQUAL "Clang")	# additional options not recognized by gcc
+	add_compile_options(-Wno-string-plus-int -Wno-implicit-const-int-float-conversion)
 endif()
 
 # Hacky override of arch-specific linker errors on Linux builds...config.h options not being honored for this 1 issue
-add_compile_options(-DARCH_X86=0 -DARCH_ARM=0 -DARCH_MIPS=0)
+#add_compile_options(-DARCH_X86=0 -DARCH_ARM=0 -DARCH_MIPS=0)
+unset(ARCH_X86 CACHE)
+unset(ARCH_ARM CACHE)
+unset(ARCH_MIPS CACHE)
 
 # To Do - conditionally apply additional compile_options based on the build target if needed
 

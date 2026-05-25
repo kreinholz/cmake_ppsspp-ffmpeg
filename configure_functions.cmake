@@ -7,6 +7,7 @@ set(CONFIG_TESTS_DIR "${CMAKE_CURRENT_BINARY_DIR}/configure_checks")
 file(MAKE_DIRECTORY ${CONFIG_TESTS_DIR})
 
 include(CheckIncludeFile)
+include(CheckIncludeFiles)
 
 # Rewrite of ffmpeg's check_cc function at line 866 of configure script
 function(check_cc target ARGUMENTS RESULT_VAR)
@@ -66,16 +67,6 @@ function(check_cc target ARGUMENTS RESULT_VAR)
 	file(WRITE "${TEST_SOURCE}" "${ARGUMENTS}")
 	set(OUTPUT_OBJ "${CONFIG_TESTS_DIR}/${target}.o")
 	if (CMAKE_CROSSCOMPILING)
-    	# Check for a header unique to your FreeBSD host
-    	check_include_file("sys/jail.h" HOST_LEAK_DETECTED)
-    	
-    	if(HOST_LEAK_DETECTED)
-        	message(FATAL_ERROR 
-            	"CRITICAL: Host system headers are leaking into the cross-compilation environment!\n"
-            	"CMake discovered FreeBSD host headers while targeting ${CMAKE_SYSTEM_NAME}.\n"
-            	"Please ensure your CMAKE_SYSROOT is valid: ${CMAKE_SYSROOT}"
-        	)
-    	endif()
 		try_compile(COMPILE_RESULT
 			"${CONFIG_TESTS_DIR}"
 			"${TEST_SOURCE}"
@@ -186,19 +177,16 @@ endfunction()
 
 # Rewrite of ffmpeg's check_header function at line 1053 of configure script
 function(check_header target header flag RESULT_VAR)
-	if (CMAKE_CROSSCOMPILING)
-    	# Check for a header unique to your FreeBSD host
-    	check_include_file("sys/jail.h" HOST_LEAK_DETECTED)
-    	
-    	if(HOST_LEAK_DETECTED)
-        	message(FATAL_ERROR 
-            	"CRITICAL: Host system headers are leaking into the cross-compilation environment!\n"
-            	"CMake discovered FreeBSD host headers while targeting ${CMAKE_SYSTEM_NAME}.\n"
-            	"Please ensure your CMAKE_SYSROOT is valid: ${CMAKE_SYSROOT}"
-        	)
-    	endif()
-    endif()
-	check_include_file(${header} ${RESULT_VAR} ${flag})
+	set(Backup_Flags ${CMAKE_REQUIRED_FLAGS})
+	if(flag)
+		string(APPEND CMAKE_REQUIRED_FLAGS " ${flag}")
+	endif()
+	if (header MATCHES ";")
+		check_include_files("${header}" ${RESULT_VAR})
+	else()
+		check_include_file(${header} ${RESULT_VAR} "${flag}")
+	endif()
+	set(CMAKE_REQUIRED_FLAGS ${Backup_Flags})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
 
@@ -220,25 +208,13 @@ endfunction()
 
 # Rewrite of ffmpeg's check_complexfunc function at line 1087 of configure script
 function(check_complexfunc target func RESULT_VAR)
-	set(args1 "f, g")
-	set(args2 "f * I")
-	set(TEST_CODE "#include <complex.h>\n#include <math.h>\nfloat foo(complex float f, complex float g) { return ${func}(${args1}); \}\nint main(void){ return (int) foo; \}")
+	set(TEST_CODE "#include <complex.h>\n#include <math.h>\nfloat foo(complex float f, complex float g) { return ${func}(f * I); \}\nint main(void){ return (int) foo; \}")
 	if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND NOT MINGW)
 		check_ld(${target} "${TEST_CODE}" "-lmsvcrt" ${RESULT_VAR})
 	else()
 		check_ld(${target} "${TEST_CODE}" "-lm" ${RESULT_VAR})
 	endif()
-	if (${RESULT_VAR} EQUAL 1)
-		set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
-	else()
-		set(TEST_CODE "#include <complex.h>\n#include <math.h>\nfloat foo(complex float f, complex float g) { return ${func}(${args2}); \}\nint main(void){ return (int) foo; \}")
-		if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND NOT MINGW)
-			check_ld(${target} "${TEST_CODE}" "-lmsvcrt" ${RESULT_VAR})
-		else()
-			check_ld(${target} "${TEST_CODE}" "-lm" ${RESULT_VAR})
-		endif()
-		set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
-	endif()
+	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 endfunction()
 
 # Rewrite of ffmpeg's check_mathfunc function at line 1102 of configure script
