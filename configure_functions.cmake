@@ -13,86 +13,84 @@ include(CheckIncludeFiles)
 function(check_cc target ARGUMENTS RESULT_VAR)
 	set(EXTRA_LIBS "")
 	set(EXTRA_FLAGS "")
-	set(ADDL_LIB_DIRS "")
+	set(ADDL_LIB_DIRS_CLEAN "")
 	foreach(arg IN ITEMS ${ARGN})
-		if(arg MATCHES "-l")
-			# Append to EXTRA_LIBS
-    		if(EXTRA_LIBS STREQUAL "")
-    			set(EXTRA_LIBS "${arg}")
-    		else()
-    			list(APPEND EXTRA_LIBS "${arg}")
-    		endif()
-    	elseif(arg MATCHES "-L")
-    		# Append to EXTRA_LIBS
-    		if(ADDL_LIB_DIRS STREQUAL "")
-    			set(ADDL_LIB_DIRS "${arg}")
-    		else()
-    			list(APPEND ADDL_LIB_DIRS "${arg}")
-    		endif()
+		if(arg MATCHES "^-l")	# Append to EXTRA_LIBS
+			list(APPEND EXTRA_LIBS "${arg}")
+		elseif(arg MATCHES "^-L")	# Append to ADDL_LIB_DIRS_CLEAN
+			string(SUBSTRING "${arg}" 2 -1 clean_dir)
+			list(APPEND ADDL_LIB_DIRS_CLEAN "${clean_dir}")
 		else()
-    		# Append to EXTRA_FLAGS
-    		if(EXTRA_FLAGS STREQUAL "")
-    			set(EXTRA_FLAGS "${arg}")
-    		else()
-    			list(APPEND EXTRA_FLAGS "${arg}")
-    		endif()
+			list(APPEND EXTRA_FLAGS "${arg}")
 		endif()
 	endforeach()
-	# Clean up duplicate paths first
-	if (EXTRA_LIBS)
-		list(REMOVE_DUPLICATES EXTRA_LIBS)
-	endif()
-	if (ADDL_LIB_DIRS)
-		list(REMOVE_DUPLICATES ADDL_LIB_DIRS)
-	endif()
-	if (EXTRA_FLAGS)
-		list(REMOVE_DUPLICATES EXTRA_FLAGS)
-	endif()
 	
-	set(COMPILE_INCLUDES "")
-	if (ADDL_INCLUDES)
-		foreach(inc_dir IN LISTS ADDL_INCLUDES)
-			# Either ensure each ADDL_INCLUDES entry is prepended with -I or do so below
-			list(APPEND COMPILE_INCLUDES "${inc_dir}")
+	if(ADDL_LIB_DIRS)
+		foreach(dir IN LISTS ADDL_LIB_DIRS)
+			if(dir MATCHES "^-L")
+				string(SUBSTRING "${dir}" 2 -1 clean_dir)
+				list(APPEND ADDL_LIB_DIRS_CLEAN "${clean_dir}")
+			else()
+				list(APPEND ADDL_LIB_DIRS_CLEAN "${dir}")
+			endif()
 		endforeach()
 	endif()
+
+	set(COMPILE_INCLUDES "")
+	if(ADDL_INCLUDES)
+		foreach(dir IN LISTS ADDL_INCLUDES)
+			if(dir MATCHES "^-I")
+				string(SUBSTRING "${dir}" 2 -1 clean_dir)
+				list(APPEND COMPILE_INCLUDES "${clean_dir}")
+			else()
+				list(APPEND COMPILE_INCLUDES "${dir}")
+			endif()
+		endforeach()
+	endif()
+	
+	# Clean up duplicate paths/extra libs
+	if(EXTRA_LIBS)
+		list(REMOVE_DUPLICATES EXTRA_LIBS)
+	endif()
+	if(ADDL_LIB_DIRS_CLEAN)
+		list(REMOVE_DUPLICATES ADDL_LIB_DIRS_CLEAN)
+	endif()
+	if(EXTRA_FLAGS)
+		list(REMOVE_DUPLICATES EXTRA_FLAGS)
+	endif()
+	if(COMPILE_INCLUDES)
+		list(REMOVE_DUPLICATES COMPILE_INCLUDES)
+	endif()
+	
 	# Check if ARGUMENTS contains a variation of main function definition
 	string(REGEX MATCH "int[ \t\r\n]+main[ \t\r\n]*\\(" HAS_MAIN "${ARGUMENTS}")
 	if(NOT HAS_MAIN)
-    	# Append a standard int main() block to the end of the existing source code
-    	string(APPEND ARGUMENTS "\n\nint main(void) {\n    return 0;\n}\n")
+		# Append a standard int main() block to the end of the existing source code
+		string(APPEND ARGUMENTS "\n\nint main(void) {\n    return 0;\n}\n")
 	endif()
 
 	set(TEST_SOURCE "${CONFIG_TESTS_DIR}/${target}.c")
 	file(WRITE "${TEST_SOURCE}" "${ARGUMENTS}")
 	set(OUTPUT_OBJ "${CONFIG_TESTS_DIR}/${target}.o")
-	if (CMAKE_CROSSCOMPILING)
-		try_compile(COMPILE_RESULT
-			"${CONFIG_TESTS_DIR}"
-			"${TEST_SOURCE}"
-			CMAKE_FLAGS "-DCMAKE_SYSROOT=${CMAKE_SYSROOT}"
-			COMPILE_DEFINITIONS ${COMPILE_INCLUDES} ${EXTRA_FLAGS}
-			LINK_LIBRARIES ${ADDL_LIB_DIRS} ${EXTRA_LIBS}
-			COPY_FILE "${OUTPUT_OBJ}"
-			OUTPUT_VARIABLE compile_log
-		)
-	else()
-		try_compile(COMPILE_RESULT
-			"${CONFIG_TESTS_DIR}"
-			"${TEST_SOURCE}"
-			COMPILE_DEFINITIONS ${COMPILE_INCLUDES} ${EXTRA_FLAGS}
-			LINK_LIBRARIES ${ADDL_LIB_DIRS} ${EXTRA_LIBS}
-			COPY_FILE "${OUTPUT_OBJ}"
-			OUTPUT_VARIABLE compile_log
-		)
-	endif()
+    try_compile(COMPILE_RESULT
+		"${CONFIG_TESTS_DIR}"
+		"${TEST_SOURCE}"
+		COMPILE_DEFINITIONS ${EXTRA_FLAGS}
+		LINK_LIBRARIES ${EXTRA_LIBS}
+		CMAKE_FLAGS
+			"-DINCLUDE_DIRECTORIES:PATH=${COMPILE_INCLUDES}"
+			"-DLINK_DIRECTORIES:PATH=${ADDL_LIB_DIRS_CLEAN}"
+		COPY_FILE "${OUTPUT_OBJ}"
+		OUTPUT_VARIABLE COMPILE_OUTPUT
+	)
+
 	if(COMPILE_RESULT)
-    	message(STATUS "${target} check passed")
+		message(STATUS "${target} check passed")
 		set(${RESULT_VAR} 1 PARENT_SCOPE)
 	else()
-#		message(STATUS "${target} check failed. Error:\n${compile_log}")
+#		message(STATUS "${target} check failed. Error:\n${COMPILE_OUTPUT}")
 		message(STATUS "${target} check failed. See ${target}_error.log for details")
-		file(WRITE "${CONFIG_TESTS_DIR}/${target}_error.log" "${compile_log}")
+		file(WRITE "${CONFIG_TESTS_DIR}/${target}_error.log" "${COMPILE_OUTPUT}")
 	endif()
 endfunction()
 

@@ -20,19 +20,21 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND CMAKE_C_COMPILER_TARGET MATCHES 
 	set(MINGW_SYSROOT TRUE)
 endif()
 
-# Set some flags needed to for ffmpeg internal checks
-if (APPLE)
-	set(ADDL_INCLUDES -I${CMAKE_OSX_SYSROOT}/usr/include)
-	set(ADDL_LIB_DIRS -L${CMAKE_OSX_SYSROOT}/usr/lib)
-elseif (ANDROID)
-	set(ADDL_INCLUDES -I${CMAKE_SYSROOT}/usr/include)
-	set(ADDL_LIB_DIRS -L${CMAKE_SYSROOT}/usr/lib/${CMAKE_ANDROID_ARCH_TRIPLE}/${CMAKE_SYSTEM_VERSION})
-elseif (CMAKE_CROSSCOMPILING)
-	set(ADDL_INCLUDES --sysroot="${CMAKE_SYSROOT}")
-	set(ADDL_LIB_DIRS --sysroot="${CMAKE_SYSROOT}")
+# Additional lib and include dirs for configure checks
+set(ADDL_INCLUDES "")
+set(ADDL_LIB_DIRS "")
+
+# For cross-compiling, let CMake handle the sysroot via search paths
+if(CMAKE_CROSSCOMPILING)
+    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+    set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 else()
-	set(ADDL_INCLUDES -I/usr/local/include)
-	set(ADDL_LIB_DIRS -L/usr/local/lib)
+    if(NOT CMAKE_OSX_SYSROOT AND UNIX AND NOT APPLE)
+        list(APPEND ADDL_INCLUDES "/usr/local/include")
+        list(APPEND ADDL_LIB_DIRS "/usr/local/lib")
+    endif()
 endif()
 
 # Silence warnings due to design philosophy differences between ffmpeg and modern compilers
@@ -46,21 +48,6 @@ endif()
 if (CMAKE_C_COMPILER_ID STREQUAL "Clang")	# additional options not recognized by gcc
 	add_compile_options(-Wno-string-plus-int -Wno-implicit-const-int-float-conversion)
 endif()
-
-# Hacky override of arch-specific linker errors on Linux builds...config.h options not being honored for this 1 issue
-set(ARCH_X86 "" CACHE INTERNAL "")
-set(ARCH_ARM "" CACHE INTERNAL "")
-set(ARCH_MIPS "" CACHE INTERNAL "")
-# Failsafe
-set(ARCH_X86 "")
-set(ARCH_ARM "")
-set(ARCH_MIPS "")
-# Another failsafe
-remove_definitions(-DARCH_X86)
-remove_definitions(-DARCH_ARM)
-remove_definitions(-DARCH_MIPS)
-
-# To Do - conditionally apply additional compile_options based on the build target if needed
 
 include(generated_headers.cmake)
 

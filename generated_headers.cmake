@@ -210,8 +210,12 @@ endif()
 
 # pthreads - see lines 5391-5414
 if (NOT HAVE_W32THREADS AND NOT HAVE_OS2THREADS)
-	check_func(pthread_join "pthread_join" HAVE_PTHREAD_JOIN)	# may need to modify check_func to add a lib arg
-	check_func(pthread_cancel "pthread_cancel" HAVE_PTHREAD_CANCEL)
+	check_func(pthread_join "pthread_join" HAVE_PTHREAD_JOIN)
+	if (ANDROID)	# workaround for older Android omitting pthread_cancel for optimization purposes
+		set(HAVE_PTHREAD_CANCEL 1)
+	else()
+		check_func(pthread_cancel "pthread_cancel" HAVE_PTHREAD_CANCEL)
+	endif()
 	if (HAVE_PTHREAD_JOIN AND HAVE_PTHREAD_CANCEL)
 		set(HAVE_PTHREADS 1)
 	endif()
