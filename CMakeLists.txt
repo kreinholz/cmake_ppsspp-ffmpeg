@@ -40,9 +40,9 @@ endif()
 # Silence warnings due to design philosophy differences between ffmpeg and modern compilers
 # Taken primarily from meson-ports/ffmpeg's meson.build script at 
 # https://gitlab.freedesktop.org/gstreamer/meson-ports/ffmpeg/-/blob/meson-4.4/meson.build?ref_type=heads
-if (MSVC)
-	add_compile_options(/WO4005 /WD4018 /WD4146 /WD4244 /WD4305 /WD4554 /WD4114 /WD4028 /WD4090 /WD4133)
-else()	# Compiler options for both clang and gcc
+if (MSVC AND NOT (CMAKE_C_COMPILER_ID STREQUAL "Clang"))
+	add_compile_options(/wd4005 /wd4018 /wd4146 /wd4244 /wd4305 /wd4554 /wd4114 /wd4028 /wd4090 /wd4133)
+else()	# Compiler options for both clang and gcc (includes clang-cl in MSVC mode)
 	add_compile_options(-D_LARGEFILE_SOURCE -DPIC -Wno-parentheses -Wno-pointer-sign -Wno-switch -Wno-format-truncation -Wno-deprecated-declarations -Wno-unused-function -Wno-uninitialized -Wno-ignored-qualifiers -Wno-unused-variable -Wno-bool-operation -Wno-incompatible-pointer-types -Wno-address -Wno-empty-body)
 endif()
 if (CMAKE_C_COMPILER_ID STREQUAL "Clang")	# additional options not recognized by gcc

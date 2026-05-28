@@ -52,11 +52,16 @@ if (NOT _RESTRICT STREQUAL "restrict")
 endif()
 
 # Get the compiler ident string in the same format as ffmpeg's configure script--retaining only the first line
-execute_process(
-    COMMAND cc "--version"
-    OUTPUT_VARIABLE CC_VERSION
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+if (MSVC AND NOT (CMAKE_C_COMPILER_ID STREQUAL "Clang"))
+	COMMAND cl
+	ERROR_VARIABLE CC_VERSION
+	OUTPUT_STRIP_TRAILING_WHITESPACE
+else()
+	execute_process(
+    	COMMAND cc "--version"
+    	OUTPUT_VARIABLE CC_VERSION
+    	OUTPUT_STRIP_TRAILING_WHITESPACE
+	)
 string(REGEX REPLACE "\n.*" "" CC_IDENT "${CC_VERSION}")
 set(CC_IDENT \"${CC_IDENT}\")
 

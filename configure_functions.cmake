@@ -14,6 +14,58 @@ function(check_cc target ARGUMENTS RESULT_VAR)
 	set(EXTRA_LIBS "")
 	set(EXTRA_FLAGS "")
 	set(ADDL_LIB_DIRS_CLEAN "")
+
+	foreach(arg IN ITEMS ${ARGN})
+    	# 1. Check for Unix link flags (-l) OR absolute library file paths (.lib, .a, .so)
+    	if(arg MATCHES "^-l")
+        	list(APPEND EXTRA_LIBS "${arg}")
+    	elseif(IS_ABSOLUTE "${arg}" AND arg MATCHES "\\.(lib|a|so|dylib)$")
+        	list(APPEND EXTRA_LIBS "${arg}")
+        	
+    	# 2. Check for Library Directory flags (Unix: -L, MSVC: /LIBPATH: or -libpath:)
+    	elseif(arg MATCHES "^-L")
+        	string(SUBSTRING "${arg}" 2 -1 clean_dir)
+        	list(APPEND ADDL_LIB_DIRS_CLEAN "${clean_dir}")
+    	elseif(arg MATCHES "^[-/][Ll][Ii][Bb][Pp][Aa][Tt][Hh]:")
+        	# Strips out both /LIBPATH: and -libpath: prefixes
+        	string(REGEX REPLACE "^[-/][Ll][Ii][Bb][Pp][Aa][Tt][Hh]:" "" clean_dir "${arg}")
+        	list(APPEND ADDL_LIB_DIRS_CLEAN "${clean_dir}")
+        	
+    	# 3. Everything else goes to flags
+    	else()
+        	list(APPEND EXTRA_FLAGS "${arg}")
+    	endif()
+	endforeach()
+	
+	# Clean up ADDL_LIB_DIRS (Handles both raw paths and legacy -L flags)
+	if(ADDL_LIB_DIRS)
+    	foreach(dir IN LISTS ADDL_LIB_DIRS)
+        	if(dir MATCHES "^-L")
+            	string(SUBSTRING "${dir}" 2 -1 clean_dir)
+            	list(APPEND ADDL_LIB_DIRS_CLEAN "${clean_dir}")
+        	elseif(dir MATCHES "^[-/][Ll][Ii][Bb][Pp][Aa][Tt][Hh]:")
+            	string(REGEX REPLACE "^[-/][Ll][Ii][Bb][Pp][Aa][Tt][Hh]:" "" clean_dir "${dir}")
+            	list(APPEND ADDL_LIB_DIRS_CLEAN "${clean_dir}")
+        	else()
+            	list(APPEND ADDL_LIB_DIRS_CLEAN "${dir}")
+        	endif()
+    	endforeach()
+	endif()
+	
+	# Clean up ADDL_INCLUDES (Handles both raw paths and Unix -I flags)
+	set(COMPILE_INCLUDES "")
+	if(ADDL_INCLUDES)
+    	foreach(dir IN LISTS ADDL_INCLUDES)
+        	if(dir MATCHES "^-I")
+            	string(SUBSTRING "${dir}" 2 -1 clean_dir)
+            	list(APPEND COMPILE_INCLUDES "${clean_dir}")
+        	else()
+            	list(APPEND COMPILE_INCLUDES "${dir}")
+        	endif()
+    	endforeach()
+	endif()
+	
+#[[
 	foreach(arg IN ITEMS ${ARGN})
 		if(arg MATCHES "^-l")	# Append to EXTRA_LIBS
 			list(APPEND EXTRA_LIBS "${arg}")
@@ -47,7 +99,7 @@ function(check_cc target ARGUMENTS RESULT_VAR)
 			endif()
 		endforeach()
 	endif()
-	
+]]	
 	# Clean up duplicate paths/extra libs
 	if(EXTRA_LIBS)
 		list(REMOVE_DUPLICATES EXTRA_LIBS)
@@ -99,6 +151,41 @@ function(check_ld target ARGUMENTS EXTERNAL_LIB RESULT_VAR)
 	set(ADDL_LIB_DIRS "")
 	set(EXTRA_LIBS "")
 	set(EXTRA_FLAGS "")
+
+set(EXTRA_LIBS "")
+set(EXTRA_FLAGS "")
+set(ADDL_LIB_DIRS_CLEAN "")
+	
+	foreach(arg IN ITEMS ${ARGN})
+    	# 1. Catch Windows-specific -l flags injected by third-party scripts
+    	if(MSVC AND arg MATCHES "^-l(msvcrt|shell32|advapi32|user32|gdi32|kernel32|psapi|ws2_32)")
+        	# Strip the Unix "-l" flag prefix and append the bare ".lib" name for MSVC
+        	string(REGEX REPLACE "^-l" "" clean_lib "${arg}")
+        	list(APPEND EXTRA_LIBS "${clean_lib}.lib")
+	
+    	# 2. Standard Unix link flags (-l)
+    	elseif(arg MATCHES "^-l")
+        	list(APPEND EXTRA_LIBS "${arg}")
+        	
+    	# 3. Absolute library paths (.lib, .a, .so, etc.)
+    	elseif(IS_ABSOLUTE "${arg}" AND arg MATCHES "\\.(lib|a|so|dylib)$")
+        	list(APPEND EXTRA_LIBS "${arg}")
+        	
+    	# 4. Library Directory flags (Unix: -L, MSVC: /LIBPATH: or -libpath:)
+    	elseif(arg MATCHES "^-L")
+        	string(SUBSTRING "${arg}" 2 -1 clean_dir)
+        	list(APPEND ADDL_LIB_DIRS_CLEAN "${clean_dir}")
+    	elseif(arg MATCHES "^[-/][Ll][Ii][Bb][Pp][Aa][Tt][Hh]:")
+        	string(REGEX REPLACE "^[-/][Ll][Ii][Bb][Pp][Aa][Tt][Hh]:" "" clean_dir "${arg}")
+        	list(APPEND ADDL_LIB_DIRS_CLEAN "${clean_dir}")
+        	
+    	# 5. Everything else is a compiler option flag
+    	else()
+        	list(APPEND EXTRA_FLAGS "${arg}")
+    	endif()
+	endforeach()
+
+#[[	MSVC-v1
 	foreach(arg IN ITEMS ${ARGN})
     	# Append to EXTRA_FLAGS
     	if(EXTRA_FLAGS STREQUAL "")
@@ -108,6 +195,40 @@ function(check_ld target ARGUMENTS EXTERNAL_LIB RESULT_VAR)
     	endif()
 	endforeach()
     if(NOT "${EXTERNAL_LIB}" STREQUAL "")
+    	foreach(lib IN LISTS EXTERNAL_LIB)
+        	# 1. Clean the name across ALL platforms (removes -l prefix if passed)
+        	string(REGEX MATCH "^-l(.+)" IS_FLAG "${lib}")
+        	if(IS_FLAG)
+            	string(SUBSTRING "${lib}" 2 -1 lib_CLEAN)
+        	else()
+            	set(lib_CLEAN "${lib}")
+        	endif()
+	
+        	# 2. Standardize lookup names for MSVC compatibility
+        	# If looking for 'msvcrt', MSVC needs 'msvcrt'. Unix needs 'm' or 'c'.
+        	set(search_names "${lib_CLEAN}" "${lib}")
+        	
+        	find_library(EXTERNAL_LIB_${lib_CLEAN} NAMES ${search_names})            
+        	if(NOT EXTERNAL_LIB_${lib_CLEAN})
+            	message(STATUS "Library ${lib} not found! Failing ${target} check")
+            	return()
+        	endif()
+	
+        	# 3. Handle Linker Flags Generically
+        	# MSVC prefers absolute paths directly. Unix accepts them perfectly too!
+        	if(MSVC)
+            	# On MSVC (including clang-cl), pass the absolute path to the .lib file
+            	list(APPEND EXTRA_LIBS "${EXTERNAL_LIB_${lib_CLEAN}}")
+        	else()
+            	# Legacy/UNIX fallback matching your original variables
+            	get_filename_component(lib_DIR "${EXTERNAL_LIB_${lib_CLEAN}}" DIRECTORY)
+            	list(APPEND ADDL_LIB_DIRS "-L${lib_DIR}")
+            	list(APPEND EXTRA_LIBS "-l${lib_CLEAN}")
+        	endif()
+    	endforeach()
+	endif()
+]]
+    #[[
         foreach(lib IN LISTS EXTERNAL_LIB)
             # If the library starts with "-l", trim it down for find_library (e.g., "-lm" -> "m")
             string(REGEX MATCH "^-l(.+)" IS_FLAG "${lib}")
@@ -134,6 +255,7 @@ function(check_ld target ARGUMENTS EXTERNAL_LIB RESULT_VAR)
     		endif()
         endforeach()
     endif()
+    ]]
     check_cc("${target}" "${ARGUMENTS}" CC_RESULT ${EXTRA_LIBS} ${ADDL_LIB_DIRS} ${EXTRA_FLAGS})
     if(CC_RESULT)
         set(${RESULT_VAR} 1 PARENT_SCOPE)
