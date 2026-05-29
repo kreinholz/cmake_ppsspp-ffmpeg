@@ -134,3 +134,8 @@ set(LIBAVUTIL_HEADERS
 	${CMAKE_CURRENT_BINARY_DIR}/libavutil/ffversion.h 
 	${CMAKE_CURRENT_BINARY_DIR}/libavutil/avconfig.h 
 )
+
+# Experimental addition to troubleshoot stubborn builds that inject ARCH_X86
+if (ARCH_X86)
+	list(APPEND LIBAVUTIL_SOURCE_FILES ${LIBAVUTIL_SRC_DIR}/x86/cpu.c)
+endif()

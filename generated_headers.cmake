@@ -53,15 +53,18 @@ endif()
 
 # Get the compiler ident string in the same format as ffmpeg's configure script--retaining only the first line
 if (MSVC AND NOT (CMAKE_C_COMPILER_ID STREQUAL "Clang"))
-	COMMAND cl
-	ERROR_VARIABLE CC_VERSION
-	OUTPUT_STRIP_TRAILING_WHITESPACE
+	execute_process(
+		COMMAND cl
+		ERROR_VARIABLE CC_VERSION
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+	)
 else()
 	execute_process(
     	COMMAND cc "--version"
     	OUTPUT_VARIABLE CC_VERSION
     	OUTPUT_STRIP_TRAILING_WHITESPACE
 	)
+endif()
 string(REGEX REPLACE "\n.*" "" CC_IDENT "${CC_VERSION}")
 set(CC_IDENT \"${CC_IDENT}\")
 
@@ -141,7 +144,7 @@ if (NOT MINGW AND NOT MINGW_SYSROOT)
 	check_func(strerror_r "strerror_r" HAVE_STRERROR_R)
 endif()
 check_func(sysconf "sysconf" HAVE_SYSCONF)
-if (NOT MINGW AND NOT MINGW_SYSROOT)
+if (NOT MINGW AND NOT MINGW_SYSROOT AND NOT CMAKE_SYSTEM_NAME MATCHES "SunOS")
 	check_func(sysctl "sysctl" HAVE_SYSCTL)
 endif()
 check_func(usleep "usleep" HAVE_USLEEP)
@@ -233,10 +236,10 @@ set(mathfuncs "atanf;atan2f;cbrt;cbrtf;copysign;cosf;erf;exp2;exp2f;expf;hypot;i
 
 foreach(func IN LISTS mathfuncs)
 	string(TOUPPER ${func} uppercase_func)
-	if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND NOT MINGW)
-		check_mathfunc(${func} ${func} "-lmsvcrt" HAVE_${uppercase_func})
+	if (MSVC)
+    	check_mathfunc(${func} ${func} "-lmsvcrt" HAVE_${uppercase_func})
 	else()
-		check_mathfunc(${func} ${func} "-lm" HAVE_${uppercase_func})
+    	check_mathfunc(${func} ${func} "-lm" HAVE_${uppercase_func})
 	endif()
 endforeach()
 

@@ -163,12 +163,11 @@ set(LIBAVCODEC_HEADERS
 	${LIBAVCODEC_SRC_DIR}/xvmc.h
 )
 
-# OS-specific sources
-if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
-	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/dxva2.c)
-	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/dxva2_h264.c)
-	if (MSVC)
-		list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/file_open.c)
+# OS and configure option/check specific additional sources
+if (WIN32)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/file_open.c)
+	if (CONFIG_DXVA2 AND HAVE_DXVA2_LIB)
+		list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/dxva2.c)
 	endif()
 endif()
 
@@ -177,3 +176,9 @@ if (Threads_FOUND)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread_slice.c)
 	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/pthread_frame.c)
 endif()
+
+# Experimental addition to troubleshoot stubborn builds that inject ARCH_X86
+if (ARCH_X86)
+	list(APPEND LIBAVCODEC_SOURCE_FILES ${LIBAVCODEC_SRC_DIR}/x86/lossless_videodsp_init.c)
+endif()
+
