@@ -19,15 +19,13 @@ set(extern_prefix_orig \"${AWK_RESULT}\")
 string(REGEX REPLACE "ff_extern" "" extern_prefix "${extern_prefix_orig}")
 set(extern_asm_orig "${AWK_RESULT}")
 string(REGEX REPLACE "ff_extern" "" extern_asm "${extern_asm_orig}")
-# Note: when I run the nm and awk commands, piped, in a shell, I don't have to do a regex replace of "ff_extern"
 
 set(build_suffix \"\")
-# Note: I can't find anywhere this is defined, nor should it matter for purposes of bundling with PPSSPP
 
 set(SLIBSUF \"${CMAKE_SHARED_LIBRARY_SUFFIX}\")
 
-set(sws_max_filter_size 256)
 # See line 3055 of ffmpeg configure script, where 256 is hardcoded as the default
+set(sws_max_filter_size 256)
 
 # Check the restrict keyword and assign accordingly
 set(_RESTRICT)
@@ -52,13 +50,13 @@ if (NOT _RESTRICT STREQUAL "restrict")
 endif()
 
 # Get the compiler ident string in the same format as ffmpeg's configure script--retaining only the first line
-if (MSVC AND NOT (CMAKE_C_COMPILER_ID STREQUAL "Clang"))
+if (MSVC AND NOT (CMAKE_C_COMPILER_ID STREQUAL "Clang"))	# Real MSVC, not clang-cl emulating MSVC
 	execute_process(
 		COMMAND cl
 		ERROR_VARIABLE CC_VERSION
 		OUTPUT_STRIP_TRAILING_WHITESPACE
 	)
-else()
+else()	# clang (including clang-cl) and gcc
 	execute_process(
     	COMMAND cc "--version"
     	OUTPUT_VARIABLE CC_VERSION
@@ -155,8 +153,8 @@ check_func_headers(lzo1x_999_compress "<lzo/lzo1x.h>" "lzo1x_999_compress" "" HA
 check_func_headers(getenv "<stdlib.h>" "getenv" "" HAVE_GETENV)
 check_func_headers(lstat "<sys/stat.h>" "lstat" "" HAVE_LSTAT)
 
-# Note: lines 5318-5328 all rely on windows.h header--modified here to only run if in fact windows.h exists
-check_header(windows "windows.h" "" HAVE_WINDOWS_H)	# Note: check repeated at line 5358 so doing only here instead
+# Note: lines 5318-5328 all rely on windows.h header--skip irrelevant checks if windows.h not found
+check_header(windows "windows.h" "" HAVE_WINDOWS_H)
 if (HAVE_WINDOWS_H)
 	check_func_headers(cotaskmemfree "<windows.h>" "CoTaskMemFree" "-lole32" HAVE_COTASKMEMFREE)
 	check_func_headers(getprocessaffinitymask "<windows.h>" "GetProcessAffinityMask" "" HAVE_GETPROCESSAFFINITYMASK)
@@ -196,7 +194,7 @@ check_header(termios "sys/termios.h" "" HAVE_TERMIOS_H)
 check_header(unistd "sys/unistd.h" "" HAVE_UNISTD_H)
 check_header(valgrind "valgrind/valgrind.h" "" HAVE_VALGRIND_VALGRIND_H)
 
-# Line 5362	# NOTE: on Windows, "shell32.lib" does NOT start with "lib" or "-l", but for check purposes we need this
+# Line 5362	# NOTE: on Windows, "shell32.lib" does NOT start with "lib" or "-l", but for my check we need this
 check_lib2(commandlinetoargvw "<windows.h>;<shellapi.h>" "CommandLineToArgvW" "-lshell32" HAVE_COMMANDLINETOARGVW)
 check_lib2(cryptgenrandom "<windows.h>;<wincrypt.h>" "CryptGenRandom" "-ladvapi32" HAVE_CRYPTGENRANDOM)
 check_lib2(getprocessmemoryinfo "<windows.h>;<psapi.h>" "GetProcessMemoryInfo" "-lpsapi" HAVE_GETPROCESSMEMORYINFO)
@@ -252,7 +250,7 @@ check_header(sys_videoio "sys/videoio.h" "" HAVE_SYS_VIDEOIO_H)
 check_type(ibasefilter "<dshow.h>" "IBaseFilter" CONFIG_DSHOW_INDEV)	# Note: not sure this is the right variable
 
 # FIXME (or don't, as both CONFIG_SNDIO_INDEV and CONFIG_SNDIO_OUTDEV are set to "0"). The simplified check doesn't
-# look in /usr/local/include and therefore fails, albeit harmlessly
+# look in /usr/local/include and therefore fails on some targets like FreeBSD, albeit harmlessly
 check_header(sndio "sndio.h" "" HAVE_SNDIO_H)
 check_struct(audio_buf_info "<sys/soundcard.h>" "audio_buf_info bytes;" "audio_buf_info bytes" HAVE_SYS_SOUNDCARD_H)
 if (NOT HAVE_SYS_SOUNDCARD_H)

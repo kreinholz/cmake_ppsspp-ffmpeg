@@ -1,6 +1,6 @@
 # configure_functions.cmake - various functions from ffmpeg's configure script rewritten for cmake
 
-# Note: cmake has modules that could accomplish a lot of these checks. CheckCSourceCompiles, CheckIncludeFile, CheckTypeSize, CheckFunctionExists, etc. However, I found during testing that sometimes, cmake reachs a different result than ffmpeg. In order to not break ffmpeg, we need to arrive at the same result as ffmpeg's configure script's check, so instead of relying on cmake modules, I ported ffmpeg's configure script's functions needed below.
+# Note: in order to not break ffmpeg, we need to arrive at the same result as ffmpeg's configure script's checks, so instead of relying solely on cmake modules, I ported ffmpeg's configure script's functions needed below.
 
 # Create a directory to store all of our tests
 set(CONFIG_TESTS_DIR "${CMAKE_CURRENT_BINARY_DIR}/configure_checks")
@@ -43,10 +43,8 @@ function(check_cc target ARGUMENTS RESULT_VAR)
 			string(REGEX REPLACE "^[-/]I" "" clean_dir "${arg}")
 			list(APPEND COMPILE_INCLUDES "${clean_dir}")
 
-		# Disambiguate raw paths if they didn't match specific flag prefixes
+		# Deal with raw paths if they didn't match any of the above patterns
 		elseif(IS_DIRECTORY "${arg}")
-			# If it's a valid directory, evaluate it against your includes vs libs fallback choice
-			# (Assuming raw paths in ADDL_INCLUDES take priority, or classify as library dir)
 			if(arg IN_LIST ADDL_INCLUDES)
 				list(APPEND COMPILE_INCLUDES "${arg}")
 			else()
@@ -59,7 +57,7 @@ function(check_cc target ARGUMENTS RESULT_VAR)
 		endif()
 	endforeach()
 	
-	# Clean up duplicate paths/extra libs safely
+	# Clean up duplicate paths/extra libs
 	foreach(list_var IN ITEMS EXTRA_LIBS ADDL_LIB_DIRS_CLEAN EXTRA_FLAGS COMPILE_INCLUDES)
 		if(${list_var})
 			list(REMOVE_DUPLICATES ${list_var})
@@ -69,7 +67,7 @@ function(check_cc target ARGUMENTS RESULT_VAR)
 	# Check if ARGUMENTS contains a variation of main function definition
 	string(REGEX MATCH "int[ \t\r\n]+main[ \t\r\n]*\\(" HAS_MAIN "${ARGUMENTS}")
 	if(NOT HAS_MAIN)
-		# Append a standard int main() block to the end of the existing source code
+		# Append a standard int main() block to the end of the existing source code as a failsafe
 		string(APPEND ARGUMENTS "\n\nint main(void) {\n    return 0;\n}\n")
 	endif()
 
@@ -92,7 +90,7 @@ function(check_cc target ARGUMENTS RESULT_VAR)
 		message(STATUS "${target} check passed")
 		set(${RESULT_VAR} 1 PARENT_SCOPE)
 	else()
-		message(STATUS "${target} check failed")
+		message(STATUS "${target} check failed")	# Standard message to not clutter build logs overmuch
 #		message(STATUS "${target} check failed. Error:\n${COMPILE_OUTPUT}")
 #		message(STATUS "${target} check failed. See ${target}_error.log for details")
 #		file(WRITE "${CONFIG_TESTS_DIR}/${target}_error.log" "${COMPILE_OUTPUT}")
@@ -223,10 +221,6 @@ function(check_func_headers target headers funcs lib RESULT_VAR)
 	check_ld(${target} "${TEST_CODE}" "${lib}" ${RESULT_VAR})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 	# To Do: in ffmpeg's configure script, some results prompt adding additional system libs.
-	# Maybe we tally up a list of such system libs and at the end of all these tests, try linking them to the
-	# appropriate ffmpeg lib (if any) the cmake way? Will have to try find_package or find_library first, then
-	# fallback on PkgConfig if needed. Although since these *should* all be system libs, find_library should suffice
-	# Frankly, we could probably read from the HAVE_ variables directly, and conditionally add libraries at the end
 endfunction()
 
 # Rewrite of ffmpeg's check_cpp_condition function at line 1151 of configure script
@@ -282,7 +276,7 @@ function(check_builtin target headers builtin RESULT_VAR)
 	check_code(${target} ld "${headers}" "${builtin}" ${RESULT_VAR})
 	set(${RESULT_VAR} "${${RESULT_VAR}}" PARENT_SCOPE)
 	# Note: configure actually invokes check_code with an extra argument!
-	# Of course, now that we've refactored check_cc to accept optional arguments, we could deal with this here
+	# Now that we've refactored check_cc to accept optional arguments, we could deal with this here if needed
 endfunction()
 
 # convenience function at the end that sets any truthy variables to "1" and any falsy variables to "0"

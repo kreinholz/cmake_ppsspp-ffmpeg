@@ -13,7 +13,7 @@ set(LIBAVUTIL_SRC_DIR ${SRC_DIR}/libavutil)
 set(LIBSWRESAMPLE_SRC_DIR ${SRC_DIR}/libswresample)
 set(LIBSWSCALE_SRC_DIR ${SRC_DIR}/libswscale)
 
-# Check for exotic cross-compiling configurations such e.g. MinGW sysroot with clang compiler
+# Check for exotic cross-compiling configurations such as MinGW sysroot with clang compiler
 if(WIN32 AND NOT MSVC)
 	set(MINGW_SYSROOT TRUE)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND CMAKE_C_COMPILER_TARGET MATCHES "mingw")
@@ -24,7 +24,7 @@ endif()
 set(ADDL_INCLUDES "")
 set(ADDL_LIB_DIRS "")
 
-# For cross-compiling, let CMake handle the sysroot via search paths
+# For cross-compiling, let CMake handle the sysroot via search paths (although toolchains probably already do this)
 if(CMAKE_CROSSCOMPILING)
     set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
     set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
@@ -49,7 +49,9 @@ if (CMAKE_C_COMPILER_ID STREQUAL "Clang")	# additional options not recognized by
 	add_compile_options(-Wno-string-plus-int -Wno-implicit-const-int-float-conversion)
 endif()
 
-include(generated_headers.cmake)
+# Run an abbreviated version of ffmpeg's configure script's checks required to generate usable config.h, 
+# libavutil/avconfig.h, and libavutil/ffversion.h headers with hardcoded minimal features required by PPSSPP
+include(configure_checks.cmake)
 
 # libavcodec
 include(libs/libavcodec.cmake)

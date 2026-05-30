@@ -1,5 +1,4 @@
 # libavformat source files (all platforms)
-# May need to further check for LIBC_MSVCRT vs GNU_WINDRES on Windows hosts
 set(LIBAVFORMAT_SOURCE_FILES
 	${LIBAVFORMAT_SRC_DIR}/aacdec.c
 	${LIBAVFORMAT_SRC_DIR}/allformats.c
